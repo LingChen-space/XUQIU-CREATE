@@ -41,7 +41,7 @@ function App() {
           {NAV_ITEMS.map(({ key, label, Icon }) => (
             <button
               key={key}
-              className={`nav-item${view === key ? " active" : ""}`}
+              className={`sidebar-nav-item${view === key ? " active" : ""}`}
               onClick={() => { setView(key); setSelectedDemand(null) }}
             >
               <Icon size={16} />
@@ -64,11 +64,11 @@ function App() {
           </div>
         </div>
       </aside>
-      <main className="main-content">
-        <header className="topbar">
-          <h1>{pageTitle}</h1>
+      <main className="main-area">
+        <header className="top-bar">
+          <h1 className="page-title">{pageTitle}</h1>
         </header>
-        <div className="page-body">
+        <div className="content-scroll">
           {view === "overview" && (
             <DailyOverview
               onSelect={(d) => setSelectedDemand(d)}
@@ -95,13 +95,10 @@ function App() {
         </div>
       </main>
       {selectedDemand && (
-        <aside className="detail-panel">
-          <DemandDetailPanel
-            demand={selectedDemand}
-            onClose={() => setSelectedDemand(null)}
-            onUpdated={() => setSelectedDemand(null)}
-          />
-        </aside>
+        <DemandDetailPanel
+          demand={selectedDemand}
+          onClose={() => setSelectedDemand(null)}
+        />
       )}
     </div>
   )

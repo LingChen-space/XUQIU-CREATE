@@ -159,6 +159,18 @@
     font-size: 11px;
     color: #64748b;
   }
+  .sidebar-footer .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
+    font-size: 12px;
+    color: #94a3b8;
+  }
+  .sidebar-footer .stat-row strong {
+    color: #e2e8f0;
+    font-weight: 600;
+  }
 
   /* ── Main Area ── */
   .main-area {
@@ -667,6 +679,13 @@
     padding: 4px 9px;
     font-size: 11px;
     border-radius: 5px;
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+  }
+  .btn-ghost:hover {
+    background: #f3f4f6;
   }
 
   /* ============================================================
