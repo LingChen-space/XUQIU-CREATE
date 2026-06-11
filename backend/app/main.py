@@ -19,6 +19,7 @@ from app.api.games import router as games_router
 from app.api.demands import router as demands_router
 from app.api.reports import router as reports_router
 from app.api.dashboard import router as dashboard_router
+from app.api.search_configs import router as search_configs_router
 
 logging.basicConfig(
     level=logging.INFO if not settings.debug else logging.DEBUG,
@@ -83,6 +84,7 @@ app.include_router(games_router)
 app.include_router(demands_router)
 app.include_router(reports_router)
 app.include_router(dashboard_router)
+app.include_router(search_configs_router)
 
 
 @app.get("/api/health")

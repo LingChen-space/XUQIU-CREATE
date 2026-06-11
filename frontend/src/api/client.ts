@@ -37,4 +37,16 @@ export const api = {
   deleteGame: (id: string) => request<any>(`/games/${id}`, { method: 'DELETE' }),
   triggerPipeline: () => request<any>('/pipeline/run', { method: 'POST' }),
   health: () => request<any>('/health'),
+  // 搜索词配置
+  getSearchConfigPlatforms: () => request<any[]>('/search-configs/platforms'),
+  getSearchConfigs: (gameId?: string) => {
+    const qs = gameId ? '?game_id=' + encodeURIComponent(gameId) : ''
+    return request<any[]>(`/search-configs${qs}`)
+  },
+  createSearchConfig: (gameId: string, data: { platform: string; keywords: string; enabled?: boolean }) =>
+    request<any>(`/search-configs?game_id=${encodeURIComponent(gameId)}`, { method: 'POST', body: JSON.stringify(data) }),
+  updateSearchConfig: (configId: string, data: { keywords?: string; enabled?: boolean }) =>
+    request<any>(`/search-configs/${configId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteSearchConfig: (configId: string) =>
+    request<any>(`/search-configs/${configId}`, { method: 'DELETE' }),
 }

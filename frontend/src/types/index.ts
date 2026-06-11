@@ -115,3 +115,18 @@ export interface HistoryLeaderboardOut {
   total_ranked: number
   leaderboard: DemandHistoryCard[]
 }
+
+export interface PlatformOption {
+  key: string
+  label: string
+}
+
+export interface SearchConfig {
+  id: string
+  game_id: string
+  platform: string
+  keywords: string
+  enabled: boolean
+  created_at: string
+  updated_at: string
+}

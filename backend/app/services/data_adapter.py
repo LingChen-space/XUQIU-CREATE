@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models.game import Game, GameStatus, GameGenre
 from app.models.platform_content import PlatformContent, ContentPlatform, ContentType
+from app.models.platform_search_config import PlatformSearchConfig
 
 
 # --- Mock 数据：开发阶段演示用 ---
@@ -104,6 +105,46 @@ def _generate_mock_contents(game_name: str) -> list[dict]:
 
 # --- 数据适配器 ---
 
+def _generate_search_term_contents(game_name: str, platform_key: str, keywords: list[str]) -> list[dict]:
+    """根据搜索词配置生成搜索词类型的模拟内容。"""
+    platform_label_map = {
+        "douyin": "抖音", "taptap": "TapTap", "xiaoheihe": "小黑盒",
+        "bilibili": "B站", "nga": "NGA", "weibo": "微博", "tieba": "贴吧",
+    }
+    platform_label = platform_label_map.get(platform_key, platform_key)
+
+    results = []
+    now = datetime.now()
+    for i, kw in enumerate(keywords):
+        jitter = timedelta(hours=(hash(kw + game_name) % 24))
+        # 生成搜索词类型的帖子/视频
+        search_titles = [
+            f"{game_name} {kw} 攻略分享",
+            f"关于{game_name}的{kw}，有人研究过吗",
+            f"{game_name}{kw}最新整理，建议收藏",
+            f"求{game_name} {kw}，大佬们帮帮忙",
+        ]
+        title = search_titles[i % len(search_titles)]
+        views = 3000 + (hash(kw) % 50000)
+        likes = 50 + (hash(kw) % 500)
+        comments = 15 + (hash(kw) % 100)
+
+        results.append({
+            "platform": platform_label,
+            "content_type": ContentType.search_term,
+            "title": title,
+            "body": f"在{platform_label}搜索「{game_name} {kw}」发现的热门内容，玩家讨论集中在{kw}相关话题",
+            "view_count": views,
+            "like_count": likes,
+            "comment_count": comments,
+            "share_count": max(1, int(likes * 0.15)),
+            "hot_score": min(100.0, (views / 2000) + (likes * 0.01)),
+            "published_at": now - jitter,
+            "url": f"https://{platform_label.lower()}.example.com/search?q={kw}",
+            "extra_data": json.dumps({"search_keyword": kw, "platform": platform_key}, ensure_ascii=False),
+        })
+    return results
+
 class DataAdapter:
     """
     数据接入适配器。
@@ -162,6 +203,14 @@ class DataAdapter:
         result = await self.session.execute(stmt)
         games = {g.id: g.name for g in result.scalars().all()}
 
+        # 读取搜索词配置，为每个游戏/平台/关键词生成搜索词内容
+        cfg_stmt = select(PlatformSearchConfig).where(
+            PlatformSearchConfig.game_id.in_(game_ids),
+            PlatformSearchConfig.enabled == True,
+        )
+        cfg_result = await self.session.execute(cfg_stmt)
+        configs = list(cfg_result.scalars().all())
+
         all_contents = []
         for gid in game_ids:
             name = games.get(gid, "")
@@ -169,6 +218,16 @@ class DataAdapter:
             for c in contents:
                 c["game_id"] = gid
             all_contents.extend(contents)
+
+            # 为每个搜索词配置生成搜索词内容
+            game_configs = [cfg for cfg in configs if cfg.game_id == gid]
+            for cfg in game_configs:
+                keywords_list = [kw.strip() for kw in cfg.keywords.split(",") if kw.strip()]
+                if keywords_list:
+                    search_contents = _generate_search_term_contents(name, cfg.platform, keywords_list)
+                    for sc in search_contents:
+                        sc["game_id"] = gid
+                    all_contents.extend(search_contents)
 
         if since:
             since_dt = since if isinstance(since, datetime) else datetime.fromisoformat(str(since))

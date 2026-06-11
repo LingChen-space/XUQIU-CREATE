@@ -1,9 +1,10 @@
 import { useState } from "react"
-import { LayoutDashboard, ClipboardList, Gamepad2, Trophy } from "lucide-react"
+import { LayoutDashboard, ClipboardList, Gamepad2, Trophy, Search } from "lucide-react"
 import DailyOverview from "./pages/DailyOverview"
 import HistoryLeaderboard from "./pages/HistoryLeaderboard"
 import DemandManagement from "./pages/DemandManagement"
 import GameManagement from "./pages/GameManagement"
+import SearchConfigPage from "./pages/SearchConfigPage"
 import DemandDetailPanel from "./components/DemandDetailPanel"
 import type { DemandCard } from "./types"
 
@@ -11,11 +12,12 @@ const NAV_ITEMS = [
   { key: "overview", label: "今日需求", Icon: LayoutDashboard },
   { key: "history", label: "历史排行榜", Icon: Trophy },
   { key: "manage", label: "需求管理", Icon: ClipboardList },
+  { key: "search", label: "搜索词配置", Icon: Search },
   { key: "games", label: "游戏管理", Icon: Gamepad2 },
 ] as const
 
 function App() {
-  const [view, setView] = useState<"overview" | "history" | "manage" | "games">("overview")
+  const [view, setView] = useState<"overview" | "history" | "manage" | "search" | "games">("overview")
   const [selectedDemand, setSelectedDemand] = useState<DemandCard | null>(null)
   const [activeGameCount, setActiveGameCount] = useState(0)
   const [managedDemandCount, setManagedDemandCount] = useState(0)
@@ -25,6 +27,7 @@ function App() {
     view === "overview" ? "今日需求总览"
       : view === "history" ? "历史需求排行榜"
       : view === "manage" ? "需求管理"
+      : view === "search" ? "搜索词配置"
       : "游戏管理"
 
   return (
@@ -38,68 +41,67 @@ function App() {
           {NAV_ITEMS.map(({ key, label, Icon }) => (
             <button
               key={key}
-              className={`sidebar-nav-item ${view === key ? "active" : ""}`}
-              onClick={() => { setView(key as typeof view); setSelectedDemand(null) }}
+              className={`nav-item${view === key ? " active" : ""}`}
+              onClick={() => { setView(key); setSelectedDemand(null) }}
             >
-              <Icon /><span>{label}</span>
+              <Icon size={16} />
+              <span>{label}</span>
             </button>
           ))}
         </nav>
-        <div className="sidebar-footer">数据更新 · 每日 06:00</div>
+        <div className="sidebar-footer">
+          <div className="stat-row">
+            <span>活跃游戏</span>
+            <strong>{activeGameCount}</strong>
+          </div>
+          <div className="stat-row">
+            <span>历史沉淀</span>
+            <strong>{historyCount}</strong>
+          </div>
+          <div className="stat-row">
+            <span>需求管理</span>
+            <strong>{managedDemandCount}</strong>
+          </div>
+        </div>
       </aside>
-
-      <div className="main-area">
-        <header className="top-bar">
-          <span className="page-title">{pageTitle}</span>
-          <span className="meta">
-            <span>{new Date().toISOString().slice(0, 10)}</span>
-            <span className="divider" />
-            <span>监控 {activeGameCount} 款游戏</span>
-            {view === "history" && (
-              <>
-                <span className="divider" />
-                <span>{historyCount} 条沉淀</span>
-              </>
-            )}
-            {view === "manage" && (
-              <>
-                <span className="divider" />
-                <span>{managedDemandCount} 条需求</span>
-              </>
-            )}
-          </span>
+      <main className="main-content">
+        <header className="topbar">
+          <h1>{pageTitle}</h1>
         </header>
-        <div className="content-scroll">
+        <div className="page-body">
           {view === "overview" && (
             <DailyOverview
-              onSelect={setSelectedDemand}
+              onSelect={(d) => setSelectedDemand(d)}
               onGameCountChange={setActiveGameCount}
-              onDemandCountChange={setManagedDemandCount}
+              onDemandCountChange={(n) => {}}
             />
           )}
           {view === "history" && (
             <HistoryLeaderboard
-              onSelect={setSelectedDemand}
+              onSelect={(d) => setSelectedDemand(d)}
               onCountChange={setHistoryCount}
             />
           )}
           {view === "manage" && (
             <DemandManagement
-              onSelect={setSelectedDemand}
+              onSelect={(d) => setSelectedDemand(d)}
               onCountChange={setManagedDemandCount}
             />
           )}
+          {view === "search" && <SearchConfigPage />}
           {view === "games" && (
             <GameManagement onCountChange={setActiveGameCount} />
           )}
         </div>
-      </div>
-
+      </main>
       {selectedDemand && (
-        <DemandDetailPanel
-          demand={selectedDemand}
-          onClose={() => setSelectedDemand(null)}
-        />
+        <aside className="detail-panel">
+          <DemandDetailPanel
+            demand={selectedDemand}
+            onClose={() => setSelectedDemand(null)}
+            onUpdated={() => setSelectedDemand(null)}
+          />
+        </aside>
       )}
     </div>
   )
