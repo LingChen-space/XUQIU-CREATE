@@ -151,6 +151,7 @@ async def get_history_leaderboard(
                 Demand.demand_date >= start_date,
                 Demand.demand_date <= today,
                 Demand.potential_score >= min_score,
+                Demand.status.notin_(["launched", "dismissed"]),
             )
         )
         .order_by(Demand.potential_score.desc(), Demand.demand_date.desc())

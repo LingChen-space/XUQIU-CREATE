@@ -1,8 +1,15 @@
 import { useEffect, useState } from "react"
-import { RefreshCw, Loader2, BarChart3, Gamepad2, TrendingUp, Zap, FileText, Plus } from "lucide-react"
+import { RefreshCw, Loader2, BarChart3, Gamepad2, TrendingUp, Zap, FileText, Plus, Brain, Target, Layers } from "lucide-react"
 import { api } from "../api/client"
 import type { DashboardSummary, DemandCard, Game } from "../types"
 import DemandCardView from "../components/DemandCard"
+
+const LEVEL_STYLE: Record<string, { bg: string; color: string }> = {
+  "S级": { bg: "var(--red-light)", color: "#b91c1c" },
+  "A级": { bg: "var(--amber-light)", color: "#92400e" },
+  "B级": { bg: "var(--primary-light)", color: "var(--primary)" },
+  "C级": { bg: "#f3f4f6", color: "var(--text-muted)" },
+}
 
 interface Props {
   onSelect: (d: DemandCard) => void
@@ -47,6 +54,7 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
   const activeGames = games.filter((g) => g.status !== "已停运")
   const activeGameNames = new Set(activeGames.map((g) => g.name))
   const hotDemands = data?.top_demands?.filter((d) => d.potential_score >= 70).length ?? 0
+  const analysis = data?.daily_analysis
 
   if (loading) {
     return (
@@ -91,6 +99,117 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
           <div className="metric-sub" style={{ textAlign: "center" }}>每日 06:00 自动执行</div>
         </div>
       </div>
+
+      {/* Daily summary analysis panel */}
+      {analysis && analysis.total_demands > 0 && (
+        <div style={{
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--radius-lg)",
+          padding: "20px 24px",
+          marginBottom: 24,
+          boxShadow: "var(--shadow-sm)",
+        }}>
+          {/* Header */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+            <Brain size={18} color="var(--primary)" />
+            <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>每日需求洞察总结</h3>
+          </div>
+
+          {/* Summary text */}
+          <p style={{
+            fontSize: 14, lineHeight: 1.7, color: "var(--text-secondary)",
+            margin: "0 0 18px 0", padding: "12px 16px",
+            background: "var(--primary-light)",
+            borderRadius: 8,
+            borderLeft: "3px solid var(--primary)",
+          }}>
+            {analysis.summary_text}
+          </p>
+
+          {/* Stats row */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 16 }}>
+            {/* Level breakdown */}
+            <div style={{
+              flex: "1 1 200px", minWidth: 180,
+              background: "#f9fafb", borderRadius: 8, padding: "14px 16px",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+                <Layers size={14} color="var(--text-secondary)" />
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>需求等级分布</span>
+              </div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                {(["S级", "A级", "B级", "C级"] as const).map((level) => {
+                  const key = (level === "S级" ? "s_count" : level === "A级" ? "a_count" : level === "B级" ? "b_count" : "c_count") as keyof typeof analysis.level_breakdown
+                  const count = analysis.level_breakdown[key] ?? 0
+                  if (count === 0) return null
+                  const s = LEVEL_STYLE[level]
+                  return (
+                    <span key={level} style={{
+                      display: "inline-flex", alignItems: "center", gap: 4,
+                      padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600,
+                      background: s.bg, color: s.color,
+                    }}>
+                      {level} × {count}
+                    </span>
+                  )
+                })}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>
+                平均潜力分 <strong style={{ color: "var(--text)" }}>{analysis.avg_potential_score}</strong>
+              </div>
+            </div>
+
+            {/* Hot tool types */}
+            <div style={{
+              flex: "1 1 200px", minWidth: 180,
+              background: "#f9fafb", borderRadius: 8, padding: "14px 16px",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+                <Target size={14} color="var(--text-secondary)" />
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>热门工具方向</span>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {analysis.hot_tool_types?.map((t) => (
+                  <span key={t.type} style={{
+                    display: "inline-flex", alignItems: "center", gap: 4,
+                    padding: "4px 10px", borderRadius: 6, fontSize: 12,
+                    background: "var(--primary-light)", color: "var(--primary)",
+                    fontWeight: 500,
+                  }}>
+                    {t.type}
+                    <span style={{ opacity: 0.7, fontSize: 11 }}>({t.count}条)</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Top recommendations */}
+          {analysis.top_recommendations?.length > 0 && (
+            <div style={{
+              background: "#fefce8", borderRadius: 8, padding: "14px 16px",
+              border: "1px solid #fde68a",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                <Zap size={14} color="#b45309" />
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#92400e" }}>首推需求</span>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {analysis.top_recommendations.map((title, i) => (
+                  <span key={i} style={{
+                    fontSize: 13, color: "#78350f",
+                    padding: "3px 10px", background: "#fef3c7", borderRadius: 5,
+                    fontWeight: 500,
+                  }}>
+                    #{i + 1} {title.length > 25 ? title.slice(0, 25) + "..." : title}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Empty state: no active games */}
       {activeGames.length === 0 ? (

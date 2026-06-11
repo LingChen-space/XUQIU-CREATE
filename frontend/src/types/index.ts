@@ -56,6 +56,25 @@ export interface DashboardSummary {
   trending_games: { id: string; name: string; genre: string; demand_count: number }[]
   tool_type_distribution: Record<string, number>
   latest_report_summary: string
+  daily_analysis: DailySummaryAnalysis
+}
+
+export interface DemandLevelBreakdown {
+  s_count: number
+  a_count: number
+  b_count: number
+  c_count: number
+}
+
+export interface DailySummaryAnalysis {
+  total_demands: number
+  avg_potential_score: number
+  level_breakdown: DemandLevelBreakdown
+  hot_tool_types: { type: string; count: number }[]
+  hot_genres: { genre: string; count: number }[]
+  signal_summary: Record<string, number>
+  top_recommendations: string[]
+  summary_text: string
 }
 
 export interface Game {

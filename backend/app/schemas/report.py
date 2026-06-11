@@ -18,6 +18,25 @@ class DailyReportOut(BaseModel):
         from_attributes = True
 
 
+class DemandLevelBreakdown(BaseModel):
+    s_count: int = 0
+    a_count: int = 0
+    b_count: int = 0
+    c_count: int = 0
+
+
+class DailySummaryAnalysis(BaseModel):
+    """每日总结分析 - 自动生成的需求洞察。"""
+    total_demands: int = 0
+    avg_potential_score: float = 0.0
+    level_breakdown: DemandLevelBreakdown = DemandLevelBreakdown()
+    hot_tool_types: list[dict] = []       # [{type: "配装/战备工具", count: 5}, ...]
+    hot_genres: list[dict] = []           # [{genre: "FPS", count: 3}, ...]
+    signal_summary: dict[str, float] = {} # avg of each signal dimension
+    top_recommendations: list[str] = []   # top 3 demand titles
+    summary_text: str = ""                # auto-generated paragraph
+
+
 class DashboardSummary(BaseModel):
     """看板首页概览。"""
     today_date: date
@@ -26,3 +45,4 @@ class DashboardSummary(BaseModel):
     trending_games: list[dict]
     tool_type_distribution: dict[str, int]
     latest_report_summary: str = ""
+    daily_analysis: DailySummaryAnalysis = DailySummaryAnalysis()
