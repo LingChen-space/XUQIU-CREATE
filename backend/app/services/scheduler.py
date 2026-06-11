@@ -1,0 +1,90 @@
+﻿# -*- coding: utf-8 -*-
+"""每日调度器 - 基于 APScheduler 的定时任务管理。"""
+
+import logging
+from datetime import date
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import settings
+from app.database import async_session
+from app.models.game import Game, GameStatus
+from app.services.data_adapter import DataAdapter
+from app.services.signal_engine import SignalEngine
+from app.services.llm_pipeline import LLMPipeline
+from app.services.report_generator import ReportGenerator
+
+logger = logging.getLogger(__name__)
+
+scheduler = AsyncIOScheduler()
+
+
+async def run_daily_pipeline():
+    """
+    每日主管线：
+    1. 数据接入 - 从爬虫体系拉取过去24h的各平台内容
+    2. 信号计算 - 对每款活跃游戏计算六维需求信号
+    3. LLM 分析 - 对候选游戏做痛点提炼
+    4. 日报生成 - 汇总生成结构化日报
+    """
+    today = date.today()
+    logger.info(f"[DailyPipeline] 开始执行 - {today}")
+
+    async with async_session() as session:
+        try:
+            # --- Step 1: 数据接入 ---
+            adapter = DataAdapter(session)
+
+            # 获取所有活跃游戏（非已停运）
+            stmt = select(Game).where(Game.status != GameStatus.inactive)
+            result = await session.execute(stmt)
+            games = result.scalars().all()
+            game_ids = [g.id for g in games]
+
+            if not game_ids:
+                logger.warning("[DailyPipeline] 无活跃游戏，跳过")
+                return
+
+            count = await adapter.ingest_contents(game_ids)
+            logger.info(f"[DailyPipeline] 数据接入完成 - {count} 条内容")
+
+            # --- Step 2: 信号计算 ---
+            engine = SignalEngine(session)
+            signals = await engine.compute_all_signals(game_ids, today)
+            logger.info(f"[DailyPipeline] 信号计算完成 - {len(signals)} 条信号")
+
+            # --- Step 3: LLM 分析 ---
+            pipeline = LLMPipeline(session)
+            demands = await pipeline.run_pipeline(game_ids, today)
+            logger.info(f"[DailyPipeline] LLM分析完成 - {len(demands)} 条需求")
+
+            # --- Step 4: 日报生成 ---
+            report_gen = ReportGenerator(session)
+            report = await report_gen.generate_daily_report(today)
+            logger.info(f"[DailyPipeline] 日报生成完成 - {report.id}")
+
+        except Exception as e:
+            logger.exception(f"[DailyPipeline] 执行失败: {e}")
+            await session.rollback()
+
+
+def start_scheduler():
+    """启动每日定时调度。"""
+    scheduler.add_job(
+        run_daily_pipeline,
+        trigger=CronTrigger(hour=settings.schedule_hour, minute=settings.schedule_minute),
+        id="daily_demand_pipeline",
+        name="每日需求挖掘管线",
+        replace_existing=True,
+    )
+    scheduler.start()
+    logger.info(f"调度器已启动 - 每日 {settings.schedule_hour:02d}:{settings.schedule_minute:02d} 执行")
+
+
+def stop_scheduler():
+    """停止调度器。"""
+    scheduler.shutdown(wait=False)
+    logger.info("调度器已停止")

@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>需求发生工具 - 好游快爆</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  :root {
+    --bg: #f2f4f7;
+    --surface: #ffffff;
+    --border: #e4e7ec;
+    --text: #1d2939;
+    --text-secondary: #667085;
+    --text-muted: #98a2b3;
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --primary-light: #eff4ff;
+    --sidebar-bg: #101828;
+    --sidebar-text: #c4cdd5;
+    --sidebar-active: #ffffff;
+    --red: #dc2626;
+    --red-light: #fef2f2;
+    --amber: #d97706;
+    --amber-light: #fffbeb;
+    --green: #059669;
+    --green-light: #ecfdf5;
+    --purple: #7c3aed;
+    --purple-light: #f5f3ff;
+    --cyan: #0891b2;
+    --radius: 8px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+    font-size: 14px;
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600;
+    border: none; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-outline { background: var(--surface); color: var(--text-secondary); border: 1px solid var(--border); }
+  .btn-outline:hover { background: #f8f9fb; border-color: #d0d5dd; }
+  .btn-danger { background: var(--red-light); color: var(--red); }
+  .btn-danger:hover { background: #fee2e2; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 5px; }
+  .btn-xs { padding: 3px 8px; font-size: 11px; border-radius: 4px; }
+
+  /* Layout */
+  .app-shell { display: flex; height: 100vh; overflow: hidden; }
+
+  .sidebar {
+    width: 224px; min-width: 224px; background: var(--sidebar-bg);
+    display: flex; flex-direction: column; user-select: none;
+  }
+  .sidebar-brand { padding: 20px 20px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .sidebar-brand h1 { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: 0.02em; }
+  .sidebar-brand .subtitle { font-size: 11px; color: #6b7280; margin-top: 2px; }
+
+  .sidebar-nav { flex: 1; padding: 12px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .sidebar-nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    border-radius: 6px; font-size: 13px; font-weight: 500;
+    color: var(--sidebar-text); cursor: pointer;
+    border: none; background: none; width: 100%; text-align: left; transition: all 0.15s;
+  }
+  .sidebar-nav-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
+  .sidebar-nav-item.active { background: rgba(255,255,255,0.1); color: var(--sidebar-active); }
+  .sidebar-nav-item svg { width: 20px; height: 20px; flex-shrink: 0; opacity: 0.7; }
+  .sidebar-nav-item.active svg { opacity: 1; }
+
+  .sidebar-footer { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 11px; color: #6b7280; }
+
+  .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+  .top-bar {
+    height: 52px; min-height: 52px; background: var(--surface);
+    border-bottom: 1px solid var(--border); display: flex;
+    align-items: center; justify-content: space-between; padding: 0 28px;
+  }
+  .top-bar .page-title { font-size: 15px; font-weight: 600; color: var(--text); }
+  .top-bar .meta { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 16px; }
+  .top-bar .actions { display: flex; gap: 8px; }
+
+  .content-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 24px 28px; }
+
+  /* Metric cards */
+  .metric-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .metric-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px 20px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .metric-label { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+  .metric-value { font-size: 30px; font-weight: 700; color: var(--text); line-height: 1; }
+  .metric-sub  { font-size: 11px; color: var(--text-muted); }
+
+  /* Section header */
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .section-header h2 { font-size: 14px; font-weight: 600; color: var(--text); }
+
+  /* Game tags */
+  .game-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+  .game-tag {
+    display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    font-size: 13px; font-weight: 500; color: var(--text);
+    cursor: default; transition: box-shadow 0.15s;
+  }
+  .game-tag:hover { box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .game-tag .tag-genre { font-size: 11px; color: var(--text-muted); }
+  .game-tag .tag-count {
+    font-size: 11px; font-weight: 600; background: var(--primary-light);
+    color: var(--primary); padding: 2px 8px; border-radius: 99px;
+  }
+
+  /* Demand cards grid */
+  .demand-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  @media (min-width: 1600px) { .demand-grid { grid-template-columns: repeat(3, 1fr); } }
+
+  .demand-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px 20px; cursor: pointer; transition: all 0.15s;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .demand-card:hover { border-color: #93b4f5; box-shadow: 0 2px 12px rgba(37,99,235,0.08); }
+
+  .demand-card .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .demand-card .card-meta { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+  .card-meta .chip, .chip {
+    font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 4px;
+    background: #f2f4f7; color: var(--text-secondary);
+  }
+  .demand-card .card-title {
+    font-size: 14px; font-weight: 600; color: var(--text);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4;
+  }
+  .demand-card .card-game { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+  .score-badge {
+    flex-shrink: 0; width: 44px; height: 44px; border-radius: 10px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 18px; line-height: 1;
+  }
+  .score-badge.high { background: var(--red-light); color: var(--red); }
+  .score-badge.mid  { background: var(--amber-light); color: var(--amber); }
+  .score-badge.low  { background: #f2f4f7; color: var(--text-secondary); }
+  .score-badge .score-sub { font-size: 8px; font-weight: 500; margin-top: 1px; opacity: 0.7; }
+
+  .card-reason {
+    font-size: 12px; color: var(--text-secondary); line-height: 1.6;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    border-top: 1px solid var(--border); padding-top: 10px;
+  }
+
+  /* Mini signals */
+  .mini-signals { display: flex; flex-direction: column; gap: 3px; }
+  .mini-signal-row { display: flex; align-items: center; gap: 8px; }
+  .mini-signal-row .sig-label { font-size: 11px; color: var(--text-muted); width: 68px; flex-shrink: 0; }
+  .mini-signal-row .sig-track { flex: 1; height: 5px; border-radius: 3px; background: #eaecf0; overflow: hidden; }
+  .mini-signal-row .sig-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
+  .mini-signal-row .sig-val { font-size: 10px; font-family: 'SF Mono','Consolas',monospace; color: var(--text-muted); width: 24px; text-align: right; }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal {
+    background: var(--surface); border-radius: 12px; width: 480px; max-width: 94vw;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2); overflow: hidden;
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 24px; border-bottom: 1px solid var(--border);
+  }
+  .modal-header h3 { font-size: 15px; font-weight: 600; }
+  .modal-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+  .modal-footer { padding: 14px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+
+  /* Form */
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--text); }
+  .form-input, .form-select {
+    padding: 8px 12px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px;
+    outline: none; transition: border-color 0.15s; font-family: inherit; background: var(--surface);
+  }
+  .form-input:focus, .form-select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-hint { font-size: 11px; color: var(--text-muted); }
+
+  /* Detail slide-over */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 100; }
+  .slideover {
+    position: fixed; top: 0; right: 0; width: 680px; max-width: 100vw; height: 100vh;
+    background: var(--surface); box-shadow: -4px 0 24px rgba(0,0,0,0.12); z-index: 101;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .slideover-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 24px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .slideover-header h3 { font-size: 15px; font-weight: 600; }
+  .slideover-close {
+    width: 32px; height: 32px; border-radius: 6px; border: none;
+    background: #f2f4f7; color: var(--text-secondary); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: background 0.15s;
+  }
+  .slideover-close:hover { background: #e4e7ec; }
+  .slideover-body { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 18px; }
+
+  /* Detail panels */
+  .detail-hero {
+    background: #f8f9fb; border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px;
+  }
+  .detail-hero .hero-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+  .detail-hero .hero-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .detail-hero .hero-game  { font-size: 13px; color: var(--text-secondary); }
+  .detail-hero .hero-reason { font-size: 13px; color: var(--text-secondary); line-height: 1.7; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+
+  .detail-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
+  .detail-panel h4 { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 14px; }
+
+  .radar-container { display: flex; justify-content: center; padding: 8px 0; }
+
+  .full-signal { margin-bottom: 10px; }
+  .full-signal .fs-header { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px; }
+  .full-signal .fs-label { color: var(--text); font-weight: 500; }
+  .full-signal .fs-val { color: var(--text-muted); font-family: 'SF Mono','Consolas',monospace; }
+  .full-signal .fs-track { height: 8px; border-radius: 4px; background: #eaecf0; overflow: hidden; }
+  .full-signal .fs-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+
+  .ai-block { margin-bottom: 14px; }
+  .ai-block .ai-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+  .ai-block ul { padding-left: 18px; font-size: 13px; color: var(--text); }
+  .ai-block ul li { margin-bottom: 4px; }
+  .ai-block p { font-size: 13px; color: var(--text-secondary); line-height: 1.7; }
+  .ai-footer { display: flex; gap: 28px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 13px; }
+  .ai-footer .footer-val { font-weight: 600; color: var(--primary); }
+
+  .evidence-list { display: flex; flex-direction: column; gap: 6px; }
+  .evidence-item { display: flex; gap: 10px; align-items: center; font-size: 13px; }
+  .evidence-item .ev-platform { font-size: 11px; padding: 2px 8px; background: #f2f4f7; color: var(--text-secondary); border-radius: 4px; flex-shrink: 0; font-weight: 500; }
+  .evidence-item .ev-link { color: var(--primary); text-decoration: none; }
+  .evidence-item .ev-link:hover { text-decoration: underline; }
+
+  .status-btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .status-btn {
+    font-size: 12px; padding: 6px 14px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--text-secondary); font-weight: 500; cursor: pointer; transition: all 0.15s;
+  }
+  .status-btn:hover { background: #f8f9fb; border-color: #d0d5dd; }
+  .status-btn.selected { background: var(--primary-light); border-color: #93b4f5; color: var(--primary); }
+
+  /* Management */
+  .mgmt-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 18px; flex-wrap: wrap; }
+  .mgmt-toolbar .search-wrap { position: relative; display: inline-flex; align-items: center; }
+  .mgmt-toolbar .search-wrap input {
+    padding: 8px 12px 8px 32px; font-size: 13px; border: 1px solid var(--border);
+    border-radius: 6px; width: 260px; outline: none; transition: border-color 0.15s;
+  }
+  .mgmt-toolbar .search-wrap input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+  .mgmt-toolbar .search-wrap .search-icon { position: absolute; left: 10px; color: var(--text-muted); display: flex; }
+
+  .mgmt-filters { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter-chip {
+    font-size: 12px; padding: 5px 12px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--text-secondary); cursor: pointer; font-weight: 500; transition: all 0.15s;
+  }
+  .filter-chip:hover { background: #f8f9fb; }
+  .filter-chip.active { background: var(--primary-light); border-color: #93b4f5; color: var(--primary); }
+
+  /* Data table */
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .data-table { width: 100%; border-collapse: collapse; }
+  .data-table thead th {
+    text-align: left; padding: 10px 16px; font-size: 11px; font-weight: 600;
+    color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em;
+    background: #f8f9fb; border-bottom: 1px solid var(--border);
+    cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  .data-table thead th:hover { color: var(--text); }
+  .data-table thead th .sort-arrow { margin-left: 4px; font-size: 10px; }
+  .data-table tbody td {
+    padding: 11px 16px; font-size: 13px; border-bottom: 1px solid #f2f4f7; color: var(--text);
+  }
+  .data-table tbody tr { cursor: pointer; transition: background 0.1s; }
+  .data-table tbody tr:hover { background: #f8f9fb; }
+
+  .status-tag {
+    font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 4px; display: inline-block;
+  }
+  .status-tag.pending   { background: #f2f4f7; color: var(--text-secondary); }
+  .status-tag.accepted  { background: var(--green-light); color: var(--green); }
+  .status-tag.deving    { background: var(--primary-light); color: var(--primary); }
+  .status-tag.online    { background: var(--purple-light); color: var(--purple); }
+  .status-tag.rejected  { background: var(--red-light); color: var(--red); }
+
+  /* Game status tags */
+  .game-status-tag {
+    font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 4px; display: inline-block;
+  }
+  .game-status-tag.hot      { background: var(--red-light); color: var(--red); }
+  .game-status-tag.operating { background: var(--green-light); color: var(--green); }
+  .game-status-tag.testing  { background: var(--amber-light); color: var(--amber); }
+  .game-status-tag.stopped  { background: #f2f4f7; color: var(--text-muted); }
+
+  /* Empty state */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 48px 24px; color: var(--text-muted); gap: 12px;
+  }
+  .empty-state .empty-icon { font-size: 40px; opacity: 0.5; }
+  .empty-state .empty-title { font-size: 14px; font-weight: 600; color: var(--text-secondary); }
+  .empty-state .empty-desc { font-size: 12px; }
+
+  /* Scrollbar */
+  .content-scroll::-webkit-scrollbar, .slideover-body::-webkit-scrollbar { width: 6px; }
+  .content-scroll::-webkit-scrollbar-track, .slideover-body::-webkit-scrollbar-track { background: transparent; }
+  .content-scroll::-webkit-scrollbar-thumb, .slideover-body::-webkit-scrollbar-thumb { background: #d0d5dd; border-radius: 3px; }
+
+  /* Confirm dialog */
+  .confirm-text { font-size: 14px; color: var(--text); line-height: 1.6; }
+  .confirm-highlight { font-weight: 600; color: var(--red); }
+
+  @media (max-width: 1024px) {
+    .sidebar { width: 64px; min-width: 64px; }
+    .sidebar-brand h1, .sidebar-brand .subtitle, .sidebar-nav-item span:not(.icon-only), .sidebar-footer { display: none; }
+    .sidebar-nav-item { justify-content: center; padding: 10px; }
+    .sidebar-brand { padding: 16px 10px; display: flex; justify-content: center; }
+    .metric-row { grid-template-columns: repeat(2, 1fr); }
+    .demand-grid { grid-template-columns: 1fr; }
+    .slideover { width: 100vw; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useEffect, useCallback } = React;
+
+// ── Constants ───────────────────────────────────────────────────
+const GENRES = ["FPS/射击", "RPG/角色扮演", "开放世界", "MOBA", "卡牌", "策略", "模拟经营", "休闲", "动作", "生存", "竞速", "二次元", "其他"];
+const GAME_STATUSES = [
+  { key: "热门", cls: "hot" },
+  { key: "在运营", cls: "operating" },
+  { key: "测试中", cls: "testing" },
+  { key: "已停运", cls: "stopped" },
+];
+const DEMAND_STATUSES = ["待评估", "已采纳", "开发中", "已上线", "已驳回"];
+const DEMAND_STATUS_MAP = {
+  "待评估": "pending", "已采纳": "accepted", "开发中": "deving", "已上线": "online", "已驳回": "rejected",
+};
+
+const SIGNAL_LABELS = {
+  repeat_question: "重复提问密度", info_scatter: "信息分散度", grassroots_tool: "民间工具萌芽",
+  scarcity: "资格稀缺信号", mechanism_complexity: "机制复杂度", content_heat: "内容热度"
+};
+const SIGNAL_COLORS = {
+  repeat_question: "#ef4444", info_scatter: "#f59e0b", grassroots_tool: "#10b981",
+  scarcity: "#8b5cf6", mechanism_complexity: "#3b82f6", content_heat: "#06b6d4"
+};
+const SIGNAL_ORDER = ["repeat_question","info_scatter","grassroots_tool","scarcity","mechanism_complexity","content_heat"];
+
+// ── Default game data ──────────────────────────────────────────
+const DEFAULT_GAMES = [
+  { id: "g1", name: "三角洲行动", genre: "FPS/射击", developer: "腾讯", status: "热门", haoyoukuaibao_id: "10001", notes: "" },
+  { id: "g2", name: "原神", genre: "开放世界", developer: "米哈游", status: "热门", haoyoukuaibao_id: "10002", notes: "" },
+  { id: "g3", name: "火影忍者", genre: "RPG/角色扮演", developer: "腾讯", status: "热门", haoyoukuaibao_id: "10003", notes: "手游版本" },
+  { id: "g4", name: "洛克王国：世界", genre: "RPG/角色扮演", developer: "腾讯", status: "测试中", haoyoukuaibao_id: "10004", notes: "" },
+  { id: "g5", name: "鸣潮", genre: "开放世界", developer: "库洛", status: "在运营", haoyoukuaibao_id: "10005", notes: "" },
+  { id: "g6", name: "王者荣耀", genre: "MOBA", developer: "腾讯", status: "热门", haoyoukuaibao_id: "10006", notes: "" },
+  { id: "g7", name: "崩坏：星穹铁道", genre: "RPG/角色扮演", developer: "米哈游", status: "热门", haoyoukuaibao_id: "10007", notes: "" },
+];
+
+// ── All mock demands (linked to managed games) ─────────────────
+const ALL_DEMANDS = [
+  { id: "a1", game_name: "三角洲行动", game_genre: "FPS/射击", tool_type: "配装/战备工具", title: "三角洲行动·卡战备阈值计算器", potential_score: 87, tool_feasibility: 5, status: "待评估", signals: { repeat_question: 82, info_scatter: 75, grassroots_tool: 45, scarcity: 10, mechanism_complexity: 90, content_heat: 68 }, llm_reasoning: "参数明确、有确定性计算逻辑、玩家决策成本高——战备值系统涉及多个配件属性的组合优化，现有攻略分散在20+帖子中，缺乏一站式配装模拟工具。", demand_date: "2026-06-10", high_freq_questions: ["M4最佳握把与枪口搭配？", "如何卡战备值上限？", "不同地图的战备阈值是多少？"] },
+  { id: "a2", game_name: "原神", game_genre: "开放世界", tool_type: "交互地图", title: "原神5.6全资源交互地图", potential_score: 92, tool_feasibility: 4, status: "待评估", signals: { repeat_question: 65, info_scatter: 88, grassroots_tool: 70, scarcity: 5, mechanism_complexity: 45, content_heat: 85 }, llm_reasoning: "新版地图资源点众多，官方米游社地图体验被广泛吐槽，玩家自发攻略分散在B站/社区，一个高速可标记的交互地图需求强烈。", demand_date: "2026-06-10", high_freq_questions: ["新地图所有神瞳位置在哪？", "有没有一键标记的采集路线？", "米游社地图太卡了怎么办？"] },
+  { id: "a3", game_name: "火影忍者", game_genre: "RPG/角色扮演", tool_type: "资格/福利聚合", title: "火影忍者手游·体验服资格聚合工具", potential_score: 83, tool_feasibility: 3, status: "待评估", signals: { repeat_question: 45, info_scatter: 30, grassroots_tool: 10, scarcity: 95, mechanism_complexity: 15, content_heat: 72 }, llm_reasoning: "官方体验服资格限量发放引发集中讨论，玩家求资格、交流抢码经验帖爆发，聚合官方公告+抢码提醒的工具天然契合该场景。", demand_date: "2026-06-10", high_freq_questions: ["体验服资格怎么获取？", "下次抢码是什么时候？", "有没有抢码脚本或提醒工具？"] },
+  { id: "a4", game_name: "洛克王国：世界", game_genre: "RPG/角色扮演", tool_type: "机制计算器", title: "洛克王国世界·孵蛋配方模拟器", potential_score: 78, tool_feasibility: 5, status: "待评估", signals: { repeat_question: 88, info_scatter: 60, grassroots_tool: 35, scarcity: 5, mechanism_complexity: 85, content_heat: 55 }, llm_reasoning: "孵蛋机制涉及精灵配种组合，参数明确但玩家试错成本高，社区已有民间配方整理但缺乏交互式的配对模拟工具。", demand_date: "2026-06-10", high_freq_questions: ["XX精灵和YY精灵能孵出什么？", "最优孵蛋配方是什么？", "有没有孵蛋模拟器？"] },
+  { id: "a5", game_name: "鸣潮", game_genre: "开放世界", tool_type: "机制计算器", title: "鸣潮·声骸属性伤害计算器", potential_score: 74, tool_feasibility: 4, status: "待评估", signals: { repeat_question: 70, info_scatter: 55, grassroots_tool: 20, scarcity: 5, mechanism_complexity: 80, content_heat: 45 }, llm_reasoning: "声骸系统属性维度多，玩家计算伤害/配装决策成本高，社区已有明确的计算器呼声。", demand_date: "2026-06-10", high_freq_questions: ["声骸主属性怎么选？", "暴击和攻击力哪个收益高？", "有没有配装计算器？"] },
+  { id: "a6", game_name: "三角洲行动", game_genre: "FPS/射击", tool_type: "配装/战备工具", title: "三角洲行动·全武器配件伤害对比工具", potential_score: 72, tool_feasibility: 4, status: "待评估", signals: { repeat_question: 65, info_scatter: 70, grassroots_tool: 40, scarcity: 5, mechanism_complexity: 85, content_heat: 60 }, llm_reasoning: "与卡战备工具互补，玩家需要直观对比不同配件的DPS/后坐力/战备值，目前攻略多为静态表格。", demand_date: "2026-06-10", high_freq_questions: ["哪把武器DPS最高？", "不同配件对后坐力的影响？", "有没有武器对比图？"] },
+  { id: "a7", game_name: "原神", game_genre: "开放世界", tool_type: "抽卡分析", title: "原神·抽卡记录分析与概率模拟器", potential_score: 85, tool_feasibility: 5, status: "已采纳", signals: { repeat_question: 75, info_scatter: 40, grassroots_tool: 60, scarcity: 5, mechanism_complexity: 55, content_heat: 78 }, llm_reasoning: "抽卡系统有公开保底规则，玩家需要统计历史记录、预测下次出金概率、规划原石预算，社区已有大量Excel模板但缺乏自动化工具。", demand_date: "2026-06-09", high_freq_questions: ["我离保底还差多少抽？", "下次UP池什么时候？", "原石怎么规划最划算？"] },
+  { id: "a8", game_name: "王者荣耀", game_genre: "MOBA", tool_type: "配装/战备工具", title: "王者荣耀·实时出装推荐引擎", potential_score: 68, tool_feasibility: 3, status: "待评估", signals: { repeat_question: 55, info_scatter: 50, grassroots_tool: 25, scarcity: 5, mechanism_complexity: 70, content_heat: 90 }, llm_reasoning: "版本更新频繁导致出装变化快，玩家需要根据对局阵容实时推荐出装，目前攻略更新滞后，缺乏动态推荐工具。", demand_date: "2026-06-10", high_freq_questions: ["新版本XX英雄怎么出装？", "对面有XX我应该出什么装备？", "有没有自动推荐出装的工具？"] },
+  { id: "a9", game_name: "崩坏：星穹铁道", game_genre: "RPG/角色扮演", tool_type: "机制计算器", title: "星穹铁道·遗器配装优化计算器", potential_score: 76, tool_feasibility: 4, status: "待评估", signals: { repeat_question: 68, info_scatter: 58, grassroots_tool: 30, scarcity: 5, mechanism_complexity: 82, content_heat: 62 }, llm_reasoning: "遗器系统属性组合复杂，玩家计算最优配装决策成本高，社区已有理论计算帖但缺乏交互式对比工具。", demand_date: "2026-06-10", high_freq_questions: ["XX角色遗器主属性怎么选？", "暴击衣还是爆伤衣？", "速度鞋阈值是多少？"] },
+];
+
+// ── SVG Icons ──────────────────────────────────────────────────
+function IconOverview() { return (<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="2" width="7" height="7" rx="1.5"/><rect x="11" y="2" width="7" height="7" rx="1.5"/><rect x="2" y="11" width="7" height="7" rx="1.5"/><rect x="11" y="11" width="7" height="7" rx="1.5"/></svg>); }
+function IconManage() { return (<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="2" width="16" height="5" rx="1"/><rect x="2" y="9" width="16" height="5" rx="1"/><rect x="2" y="16" width="16" height="2" rx="1"/></svg>); }
+function IconGame() { return (<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 11v3a1 1 0 001 1h6a1 1 0 001-1v-3M8 7V5a2 2 0 012-2h0a2 2 0 012 2v2"/><rect x="3" y="7" width="14" height="10" rx="2"/><circle cx="7" cy="12" r="1" fill="currentColor"/><circle cx="13" cy="12" r="1" fill="currentColor"/></svg>); }
+function IconClose() { return (<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/></svg>); }
+function IconSearch() { return (<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="8.5" cy="8.5" r="5.5"/><line x1="12.5" y1="12.5" x2="17.5" y2="17.5"/></svg>); }
+function IconPlus() { return (<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/></svg>); }
+function IconEdit() { return (<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M5 15l-2 2 1-2 10-10 2 2-10 10zM14 4l2 2"/></svg>); }
+function IconTrash() { return (<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 6h12M7 6V4a1 1 0 011-1h4a1 1 0 011 1v2M5 6l1 11h8l1-11"/></svg>); }
+function IconChevronUp() { return (<span style={{fontSize:10}}>&#9650;</span>); }
+function IconChevronDown() { return (<span style={{fontSize:10}}>&#9660;</span>); }
+
+// ── Radar Chart ────────────────────────────────────────────────
+function RadarChart({ signals, size = 180 }) {
+  const keys = SIGNAL_ORDER; const n = keys.length;
+  const cx = size / 2, cy = size / 2, r = size * 0.38;
+  const angle = i => (Math.PI * 2 * i) / n - Math.PI / 2;
+  const point = (i, val) => { const a = angle(i); return [cx + Math.cos(a) * r * val, cy + Math.sin(a) * r * val]; };
+
+  const levelPolygons = [0.25,0.5,0.75,1.0].map(lev => {
+    const pts = keys.map((_,i) => point(i,lev)).map(p => p.join(",")).join(" ");
+    return <polygon key={lev} points={pts} fill="none" stroke="#eaecf0" strokeWidth="1" />;
+  });
+
+  const axes = keys.map((_,i) => { const [x,y] = point(i,1); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="#eaecf0" strokeWidth="1" />; });
+
+  const dataPoints = keys.map((k,i) => { const v = (signals[k]||0)/100; return point(i,v); });
+  const dataPolygon = dataPoints.map(p => p.join(",")).join(" ");
+  const areaPolygon = dataPoints.map(p => p.join(",")).join(" ") + ` ${cx},${cy}`;
+
+  const labels = keys.map((k,i) => {
+    const [x,y] = point(i,1.18);
+    return <text key={k} x={x} y={y} textAnchor="middle" dominantBaseline="middle" style={{fontSize:10,fill:"#667085",fontWeight:500,fontFamily:"inherit"}}>{SIGNAL_LABELS[k]}</text>;
+  });
+
+  const dots = keys.map((k,i) => { const v = (signals[k]||0)/100; const [x,y] = point(i,v); return <circle key={k} cx={x} cy={y} r="3" fill={SIGNAL_COLORS[k]} stroke="#fff" strokeWidth="1.5" />; });
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      {levelPolygons}{axes}
+      <polygon points={areaPolygon} fill="rgba(37,99,235,0.08)" stroke="none" />
+      <polygon points={dataPolygon} fill="none" stroke="#2563eb" strokeWidth="1.8" strokeLinejoin="round" />
+      {dots}{labels}
+    </svg>
+  );
+}
+
+// ── Helpers ─────────────────────────────────────────────────────
+function scoreTier(s) { return s >= 80 ? "high" : s >= 60 ? "mid" : "low"; }
+
+// ── Game Form Modal ────────────────────────────────────────────
+function GameFormModal({ game, onSave, onClose }) {
+  const isEdit = !!game;
+  const [form, setForm] = useState(game || { name: "", genre: GENRES[0], developer: "", status: "在运营", haoyoukuaibao_id: "", notes: "" });
+  const [errors, setErrors] = useState({});
+
+  const handleChange = (field, value) => {
+    setForm(f => ({ ...f, [field]: value }));
+    if (errors[field]) setErrors(e => ({ ...e, [field]: null }));
+  };
+
+  const validate = () => {
+    const e = {};
+    if (!form.name.trim()) e.name = "请输入游戏名称";
+    if (!form.developer.trim()) e.developer = "请输入厂商名称";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSubmit = () => {
+    if (!validate()) return;
+    onSave({
+      ...form,
+      id: isEdit ? game.id : "g" + Date.now(),
+      name: form.name.trim(),
+      developer: form.developer.trim(),
+    });
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{isEdit ? "编辑游戏" : "添加游戏"}</h3>
+          <button className="slideover-close" onClick={onClose}><IconClose /></button>
+        </div>
+        <div className="modal-body">
+          <div className="form-group">
+            <label className="form-label">游戏名称 <span style={{color:"var(--red)"}}>*</span></label>
+            <input className="form-input" value={form.name} onChange={e => handleChange("name", e.target.value)} placeholder="如：三角洲行动" autoFocus />
+            {errors.name && <span style={{fontSize:11,color:"var(--red)"}}>{errors.name}</span>}
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">品类</label>
+              <select className="form-select" value={form.genre} onChange={e => handleChange("genre", e.target.value)}>
+                {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">运营状态</label>
+              <select className="form-select" value={form.status} onChange={e => handleChange("status", e.target.value)}>
+                {GAME_STATUSES.map(s => <option key={s.key} value={s.key}>{s.key}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">厂商 <span style={{color:"var(--red)"}}>*</span></label>
+            <input className="form-input" value={form.developer} onChange={e => handleChange("developer", e.target.value)} placeholder="如：腾讯" />
+            {errors.developer && <span style={{fontSize:11,color:"var(--red)"}}>{errors.developer}</span>}
+          </div>
+          <div className="form-group">
+            <label className="form-label">好游快爆 ID</label>
+            <input className="form-input" value={form.haoyoukuaibao_id} onChange={e => handleChange("haoyoukuaibao_id", e.target.value)} placeholder="可选，用于对接内部系统" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">备注</label>
+            <input className="form-input" value={form.notes} onChange={e => handleChange("notes", e.target.value)} placeholder="可选" />
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-outline" onClick={onClose}>取消</button>
+          <button className="btn btn-primary" onClick={handleSubmit}>{isEdit ? "保存修改" : "添加游戏"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Confirm Dialog ──────────────────────────────────────────────
+function ConfirmDialog({ title, message, highlight, onConfirm, onClose }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{width:380}} onClick={e => e.stopPropagation()}>
+        <div className="modal-header"><h3>{title || "确认操作"}</h3></div>
+        <div className="modal-body">
+          <p className="confirm-text">{message}</p>
+          {highlight && <p className="confirm-text" style={{marginTop:8}}><span className="confirm-highlight">{highlight}</span></p>}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-outline" onClick={onClose}>取消</button>
+          <button className="btn btn-danger" onClick={onConfirm}>确认删除</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Components ─────────────────────────────────────────────────
+function SignalBar({ name, value }) {
+  return (
+    <div className="full-signal">
+      <div className="fs-header"><span className="fs-label">{SIGNAL_LABELS[name]}</span><span className="fs-val">{Math.round(value)}</span></div>
+      <div className="fs-track"><div className="fs-fill" style={{width:value+"%",backgroundColor:SIGNAL_COLORS[name]}} /></div>
+    </div>
+  );
+}
+
+function MiniSignals({ signals }) {
+  const top = SIGNAL_ORDER.map(k => [k,signals[k]]).filter(([,v]) => v > 30).sort(([,a],[,b]) => b - a).slice(0,3);
+  return (
+    <div className="mini-signals">
+      {top.map(([k,v]) => (
+        <div key={k} className="mini-signal-row">
+          <span className="sig-label">{SIGNAL_LABELS[k]}</span>
+          <div className="sig-track"><div className="sig-fill" style={{width:v+"%",backgroundColor:SIGNAL_COLORS[k]}} /></div>
+          <span className="sig-val">{Math.round(v)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DemandCard({ demand, onSelect }) {
+  return (
+    <div className="demand-card" onClick={() => onSelect(demand)}>
+      <div className="card-top">
+        <div style={{flex:1,minWidth:0}}>
+          <div className="card-meta">
+            <span className="chip">{demand.tool_type}</span>
+            <span className="chip">{demand.game_genre}</span>
+          </div>
+          <div className="card-title">{demand.title}</div>
+          <div className="card-game">{demand.game_name}</div>
+        </div>
+        <div className={"score-badge " + scoreTier(demand.potential_score)}>{Math.round(demand.potential_score)}<span className="score-sub">潜力分</span></div>
+      </div>
+      <MiniSignals signals={demand.signals} />
+      <div className="card-reason">{demand.llm_reasoning}</div>
+    </div>
+  );
+}
+
+function DemandDetailSlideover({ demand, onClose }) {
+  const [status, setStatus] = useState(demand.status);
+  if (!demand) return null;
+
+  const mockEvidence = [
+    { platform: "B站", title: demand.game_name + "相关攻略视频", url: "#" },
+    { platform: "TapTap", title: demand.game_name + "社区讨论帖", url: "#" },
+    { platform: "小黑盒", title: "玩家自制的" + demand.tool_type + "分享", url: "#" },
+  ];
+
+  return (
+    <>
+      <div className="overlay" onClick={onClose} />
+      <div className="slideover">
+        <div className="slideover-header">
+          <h3>需求详情</h3>
+          <button className="slideover-close" onClick={onClose}><IconClose /></button>
+        </div>
+        <div className="slideover-body">
+          <div className="detail-hero">
+            <div className="hero-header">
+              <div style={{flex:1}}>
+                <div style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
+                  <span className="chip">{demand.tool_type}</span>
+                  <span className={"status-tag " + (DEMAND_STATUS_MAP[status]||"pending")}>{status}</span>
+                </div>
+                <div className="hero-title">{demand.title}</div>
+                <div className="hero-game">{demand.game_name} · {demand.game_genre}</div>
+              </div>
+              <div className={"score-badge " + scoreTier(demand.potential_score)} style={{width:52,height:52,borderRadius:12,fontSize:22}}>{Math.round(demand.potential_score)}<span className="score-sub">潜力分</span></div>
+            </div>
+            <div className="hero-reason">{demand.llm_reasoning}</div>
+          </div>
+
+          <div className="detail-panel">
+            <h4>六维信号评分</h4>
+            <div style={{display:"flex",gap:32,alignItems:"center",flexWrap:"wrap"}}>
+              <div className="radar-container"><RadarChart signals={demand.signals} size={200} /></div>
+              <div style={{flex:1,minWidth:220}}>{SIGNAL_ORDER.map(k => <SignalBar key={k} name={k} value={demand.signals[k]} />)}</div>
+            </div>
+          </div>
+
+          <div className="detail-panel">
+            <h4>AI 分析结论</h4>
+            <div className="ai-block">
+              <div className="ai-label">玩家高频问题</div>
+              <ul>{(demand.high_freq_questions||["当前内容以攻略帖和视频为主，缺乏结构化的交互工具","玩家反复在社区提问，表明信息检索成本高","已有民间自发制作的Excel/文档在流传，验证了强需求"]).map((q,i) => <li key={i}>{q}</li>)}</ul>
+            </div>
+            <div className="ai-block"><div className="ai-label">信息缺口</div><p>{demand.llm_reasoning}</p></div>
+            <div className="ai-footer">
+              <div>工具化可行度 <span className="footer-val">{demand.tool_feasibility} / 5</span></div>
+              <div>建议类型 <span style={{fontWeight:600,color:"var(--text)"}}>{demand.tool_type}</span></div>
+            </div>
+          </div>
+
+          <div className="detail-panel">
+            <h4>证据来源（{mockEvidence.length} 条）</h4>
+            <div className="evidence-list">
+              {mockEvidence.map((p,i) => (
+                <div key={i} className="evidence-item"><span className="ev-platform">{p.platform}</span><a className="ev-link" href={p.url} onClick={e => e.preventDefault()}>{p.title}</a></div>
+              ))}
+            </div>
+          </div>
+
+          <div className="detail-panel">
+            <h4>需求跟进</h4>
+            <div className="status-btn-row">
+              {DEMAND_STATUSES.map(s => (
+                <button key={s} className={"status-btn" + (status===s?" selected":"")} onClick={() => setStatus(s)}>{s}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Pages ──────────────────────────────────────────────────────
+function OverviewPage({ games, demands, onSelect }) {
+  const activeGames = games.filter(g => g.status !== "已停运");
+  const activeGameNames = new Set(activeGames.map(g => g.name));
+  const managedDemands = demands.filter(d => activeGameNames.has(d.game_name));
+  const highScore = managedDemands.filter(d => d.potential_score >= 70).length;
+
+  // trending games = active games that have demands
+  const gameDemandCount = {};
+  managedDemands.forEach(d => { gameDemandCount[d.game_name] = (gameDemandCount[d.game_name]||0) + 1; });
+  const trendingGames = activeGames.filter(g => gameDemandCount[g.name]).sort((a,b) => (gameDemandCount[b.name]||0) - (gameDemandCount[a.name]||0));
+
+  return (
+    <>
+      <div className="metric-row">
+        <div className="metric-card"><div className="metric-label">今日需求</div><div className="metric-value">{managedDemands.length}</div><div className="metric-sub">2026-06-10</div></div>
+        <div className="metric-card"><div className="metric-label">监控游戏</div><div className="metric-value">{activeGames.length}</div><div className="metric-sub">已停运不计入</div></div>
+        <div className="metric-card"><div className="metric-label">爆款需求</div><div className="metric-value" style={{color:"var(--red)"}}>{highScore}</div><div className="metric-sub">潜力分 ≥ 70</div></div>
+        <div className="metric-card" style={{justifyContent:"center",alignItems:"center"}}>
+          <button className="btn btn-primary"
+            onClick={() => alert("这是静态演示。启动完整版后点击此按钮将触发真实分析管线。")}>
+            立即分析
+          </button>
+        </div>
+      </div>
+
+      {trendingGames.length > 0 ? (
+        <>
+          <div className="section-header"><h2>趋势游戏</h2></div>
+          <div className="game-tags">
+            {trendingGames.map(g => (
+              <span key={g.id} className="game-tag">
+                {g.name}
+                <span className="tag-genre">{g.genre}</span>
+                <span className="tag-count">{gameDemandCount[g.name]||0}</span>
+              </span>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="empty-state" style={{marginBottom:24}}>
+          <div className="empty-icon">🎮</div>
+          <div className="empty-title">暂无监控游戏</div>
+          <div className="empty-desc">请先在"游戏管理"中添加需要监控的游戏，系统将仅针对这些游戏挖掘需求</div>
+        </div>
+      )}
+
+      {managedDemands.length > 0 ? (
+        <>
+          <div className="section-header">
+            <h2>今日需求排行榜</h2>
+            <span style={{fontSize:12,color:"var(--text-muted)"}}>共 {managedDemands.length} 条 · 按潜力分排序</span>
+          </div>
+          <div className="demand-grid">
+            {[...managedDemands].sort((a,b) => b.potential_score - a.potential_score).map(d => <DemandCard key={d.id} demand={d} onSelect={onSelect} />)}
+          </div>
+        </>
+      ) : activeGames.length > 0 ? (
+        <div className="empty-state">
+          <div className="empty-icon">📭</div>
+          <div className="empty-title">暂无需求数据</div>
+          <div className="empty-desc">当前监控的游戏尚未产生需求信号，请等待下次分析或点击"立即分析"触发</div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function DemandManagePage({ games, demands, onSelect }) {
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState(null);
+  const [sortKey, setSortKey] = useState("potential_score");
+  const [sortDir, setSortDir] = useState("desc");
+
+  const activeGameNames = new Set(games.filter(g => g.status !== "已停运").map(g => g.name));
+  const managedDemands = demands.filter(d => activeGameNames.has(d.game_name));
+
+  const filtered = useMemo(() => {
+    let result = [...managedDemands];
+    if (search) { const q = search.toLowerCase(); result = result.filter(d => d.title.toLowerCase().includes(q) || d.game_name.toLowerCase().includes(q)); }
+    if (statusFilter) { result = result.filter(d => d.status === statusFilter); }
+    result.sort((a,b) => {
+      let va, vb;
+      if (sortKey === "potential_score") { va = a.potential_score; vb = b.potential_score; }
+      else if (sortKey === "title") { va = a.title; vb = b.title; }
+      else if (sortKey === "game_name") { va = a.game_name; vb = b.game_name; }
+      else if (sortKey === "tool_type") { va = a.tool_type; vb = b.tool_type; }
+      else if (sortKey === "status") { va = a.status; vb = b.status; }
+      else { va = a.potential_score; vb = b.potential_score; }
+      if (typeof va === "string") { const cmp = va.localeCompare(vb,"zh"); return sortDir==="asc"?cmp:-cmp; }
+      return sortDir==="asc"?va-vb:vb-va;
+    });
+    return result;
+  }, [managedDemands, search, statusFilter, sortKey, sortDir]);
+
+  const handleSort = key => { if (sortKey===key) setSortDir(d => d==="asc"?"desc":"asc"); else { setSortKey(key); setSortDir("desc"); } };
+  const renderSortArrow = key => {
+    if (sortKey !== key) return <span className="sort-arrow" style={{opacity:0.3}}><IconChevronUp /></span>;
+    return sortDir==="asc" ? <span className="sort-arrow"><IconChevronUp /></span> : <span className="sort-arrow"><IconChevronDown /></span>;
+  };
+
+  return (
+    <div>
+      <div className="mgmt-toolbar">
+        <div className="search-wrap">
+          <span className="search-icon"><IconSearch /></span>
+          <input type="text" placeholder="搜索需求标题或游戏名..." value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        <div className="mgmt-filters">
+          <button className={"filter-chip" + (!statusFilter?" active":"")} onClick={() => setStatusFilter(null)}>全部</button>
+          {DEMAND_STATUSES.map(s => (
+            <button key={s} className={"filter-chip" + (statusFilter===s?" active":"")} onClick={() => setStatusFilter(s)}>{s}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th onClick={() => handleSort("title")}>需求 {renderSortArrow("title")}</th>
+              <th onClick={() => handleSort("game_name")} style={{width:130}}>游戏 {renderSortArrow("game_name")}</th>
+              <th onClick={() => handleSort("tool_type")} style={{width:130}}>类型 {renderSortArrow("tool_type")}</th>
+              <th onClick={() => handleSort("potential_score")} style={{width:80,textAlign:"center"}}>潜力分 {renderSortArrow("potential_score")}</th>
+              <th onClick={() => handleSort("status")} style={{width:80,textAlign:"center"}}>状态 {renderSortArrow("status")}</th>
+              <th style={{width:80,textAlign:"center"}}>可行度</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(d => {
+              const sc = d.potential_score>=80?"var(--red)":d.potential_score>=60?"var(--amber)":"var(--text-secondary)";
+              return (
+                <tr key={d.id} onClick={() => onSelect(d)}>
+                  <td style={{fontWeight:500}}>{d.title}</td>
+                  <td style={{color:"var(--text-secondary)"}}>{d.game_name}</td>
+                  <td><span className="chip">{d.tool_type}</span></td>
+                  <td style={{textAlign:"center",fontWeight:700,color:sc,fontSize:14}}>{Math.round(d.potential_score)}</td>
+                  <td style={{textAlign:"center"}}><span className={"status-tag " + (DEMAND_STATUS_MAP[d.status]||"pending")}>{d.status}</span></td>
+                  <td style={{textAlign:"center",color:"var(--text-secondary)"}}>{d.tool_feasibility}/5</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function GameManagePage({ games, onGamesChange }) {
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [editingGame, setEditingGame] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const filtered = useMemo(() => {
+    let result = [...games];
+    if (search) { const q = search.toLowerCase(); result = result.filter(g => g.name.toLowerCase().includes(q) || g.developer.toLowerCase().includes(q)); }
+    if (statusFilter) { result = result.filter(g => g.status === statusFilter); }
+    return result;
+  }, [games, search, statusFilter]);
+
+  const handleSave = (gameData) => {
+    if (editingGame) {
+      onGamesChange(games.map(g => g.id === editingGame.id ? { ...gameData, id: editingGame.id } : g));
+    } else {
+      onGamesChange([...games, gameData]);
+    }
+    setShowForm(false);
+    setEditingGame(null);
+  };
+
+  const handleDelete = () => {
+    if (!deleteTarget) return;
+    onGamesChange(games.filter(g => g.id !== deleteTarget.id));
+    setDeleteTarget(null);
+  };
+
+  const openEdit = (game) => { setEditingGame(game); setShowForm(true); };
+  const openAdd = () => { setEditingGame(null); setShowForm(true); };
+
+  return (
+    <div>
+      <div className="mgmt-toolbar">
+        <div className="search-wrap">
+          <span className="search-icon"><IconSearch /></span>
+          <input type="text" placeholder="搜索游戏名称或厂商..." value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        <div className="mgmt-filters">
+          <button className={"filter-chip" + (!statusFilter?" active":"")} onClick={() => setStatusFilter(null)}>全部</button>
+          {GAME_STATUSES.map(s => (
+            <button key={s.key} className={"filter-chip" + (statusFilter===s.key?" active":"")} onClick={() => setStatusFilter(s.key)}>{s.key}</button>
+          ))}
+        </div>
+        <div style={{flex:1}} />
+        <button className="btn btn-primary" onClick={openAdd}><IconPlus />添加游戏</button>
+      </div>
+
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th style={{width:180}}>游戏名称</th>
+              <th style={{width:110}}>品类</th>
+              <th style={{width:100}}>厂商</th>
+              <th style={{width:80}}>状态</th>
+              <th>备注</th>
+              <th style={{width:90,textAlign:"center"}}>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr><td colSpan={6} style={{textAlign:"center",padding:32,color:"var(--text-muted)"}}>暂无匹配的游戏</td></tr>
+            ) : filtered.map(g => {
+              const statusInfo = GAME_STATUSES.find(s => s.key === g.status) || GAME_STATUSES[1];
+              return (
+                <tr key={g.id}>
+                  <td style={{fontWeight:500}}>{g.name}</td>
+                  <td style={{color:"var(--text-secondary)",fontSize:12}}>{g.genre}</td>
+                  <td style={{color:"var(--text-secondary)"}}>{g.developer}</td>
+                  <td><span className={"game-status-tag " + statusInfo.cls}>{g.status}</span></td>
+                  <td style={{color:"var(--text-muted)",fontSize:12,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{g.notes || "-"}</td>
+                  <td style={{textAlign:"center"}}>
+                    <div style={{display:"flex",gap:4,justifyContent:"center"}}>
+                      <button className="btn btn-outline btn-xs" onClick={e => { e.stopPropagation(); openEdit(g); }} title="编辑"><IconEdit /></button>
+                      <button className="btn btn-danger btn-xs" onClick={e => { e.stopPropagation(); setDeleteTarget(g); }} title="删除"><IconTrash /></button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{marginTop:16,fontSize:12,color:"var(--text-muted)"}}>
+        共 {games.length} 款游戏 · 活跃监控 {games.filter(g => g.status !== "已停运").length} 款
+      </div>
+
+      {showForm && <GameFormModal game={editingGame} onSave={handleSave} onClose={() => { setShowForm(false); setEditingGame(null); }} />}
+      {deleteTarget && (
+        <ConfirmDialog
+          title="删除游戏"
+          message="删除后将不再针对该游戏挖掘需求，已有的需求数据不受影响。"
+          highlight={`确定要删除「${deleteTarget.name}」吗？`}
+          onConfirm={handleDelete}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── App Shell ──────────────────────────────────────────────────
+function App() {
+  const [view, setView] = useState("overview");
+  const [selectedDemand, setSelectedDemand] = useState(null);
+
+  // Game state with localStorage persistence
+  const [games, setGames] = useState(() => {
+    try { const saved = localStorage.getItem("hykb_games"); return saved ? JSON.parse(saved) : DEFAULT_GAMES; }
+    catch { return DEFAULT_GAMES; }
+  });
+  useEffect(() => { localStorage.setItem("hykb_games", JSON.stringify(games)); }, [games]);
+
+  // Compute managed demands
+  const activeGameNames = useMemo(() => new Set(games.filter(g => g.status !== "已停运").map(g => g.name)), [games]);
+  const managedDemands = useMemo(() => ALL_DEMANDS.filter(d => activeGameNames.has(d.game_name)), [activeGameNames]);
+
+  const pageTitle = view === "overview" ? "今日需求总览" : view === "manage" ? "需求管理" : "游戏管理";
+
+  const handleViewChange = (v) => { setView(v); setSelectedDemand(null); };
+
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <h1>需求发生工具</h1>
+          <div className="subtitle">好游快爆</div>
+        </div>
+        <nav className="sidebar-nav">
+          <button className={"sidebar-nav-item" + (view==="overview"?" active":"")} onClick={() => handleViewChange("overview")}>
+            <IconOverview /><span>今日需求</span>
+          </button>
+          <button className={"sidebar-nav-item" + (view==="manage"?" active":"")} onClick={() => handleViewChange("manage")}>
+            <IconManage /><span>需求管理</span>
+          </button>
+          <button className={"sidebar-nav-item" + (view==="games"?" active":"")} onClick={() => handleViewChange("games")}>
+            <IconGame /><span>游戏管理</span>
+          </button>
+        </nav>
+        <div className="sidebar-footer">数据更新 · 每日 06:00</div>
+      </aside>
+
+      <div className="main-area">
+        <header className="top-bar">
+          <span className="page-title">{pageTitle}</span>
+          <span className="meta">
+            <span>2026-06-10</span>
+            <span style={{width:1,height:16,background:"var(--border)"}}></span>
+            <span>监控游戏 {games.filter(g => g.status !== "已停运").length} 款</span>
+            {view !== "games" && (<><span style={{width:1,height:16,background:"var(--border)"}}></span><span>需求 {managedDemands.length} 条</span></>)}
+          </span>
+        </header>
+        <div className="content-scroll">
+          {view === "overview" && <OverviewPage games={games} demands={ALL_DEMANDS} onSelect={setSelectedDemand} />}
+          {view === "manage" && <DemandManagePage games={games} demands={ALL_DEMANDS} onSelect={setSelectedDemand} />}
+          {view === "games" && <GameManagePage games={games} onGamesChange={setGames} />}
+        </div>
+      </div>
+
+      {selectedDemand && <DemandDetailSlideover demand={selectedDemand} onClose={() => setSelectedDemand(null)} />}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

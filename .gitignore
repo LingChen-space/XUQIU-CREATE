@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.venv/
+venv/
+
+# Node / Vite
+frontend/node_modules/
+frontend/dist/
+
+# Database (local)
+backend/data/*.db
+
+# Environment
+.env
+*.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp scripts
+check_*.py
+verify_*.py
+tmp_*.py
+diagnose.py
+rebuild_pipeline.py
