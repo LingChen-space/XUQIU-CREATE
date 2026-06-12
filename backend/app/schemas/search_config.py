@@ -10,6 +10,7 @@ class SearchConfigCreate(BaseModel):
     keywords: str  # comma-separated
     enabled: bool = True
     crawl_count: int = 50
+    proxy_url: str | None = None
 
     @field_validator("platform")
     @classmethod
@@ -42,6 +43,7 @@ class SearchConfigUpdate(BaseModel):
     keywords: str | None = None
     enabled: bool | None = None
     crawl_count: int | None = None
+    proxy_url: str | None = None
 
 
 class SearchConfigOut(BaseModel):
@@ -52,6 +54,7 @@ class SearchConfigOut(BaseModel):
     keywords: str
     enabled: bool
     crawl_count: int
+    proxy_url: str | None = None
     created_at: datetime
     updated_at: datetime
 

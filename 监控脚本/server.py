@@ -251,7 +251,7 @@ def _fetch_taptap(keyword: str, count: int, sort: str | None, proxy_url: str | N
 # 抖音采集
 # ---------------------------------------------------------------------------
 
-def _fetch_douyin(keyword: str, count: int, sort: str, headless: bool) -> list[dict]:
+async def _fetch_douyin(keyword: str, count: int, sort: str, headless: bool) -> list[dict]:
     from app.douyin.fetcher import (
         DouyinAntiSpamException,
         get_filter_sort_type,
@@ -259,14 +259,12 @@ def _fetch_douyin(keyword: str, count: int, sort: str, headless: bool) -> list[d
     )
 
     try:
-        response_items, refreshed_cookies = asyncio.run(
-            get_douyin_video_search_response(
-                search_word=keyword,
-                cookie_data=_load_douyin_cookies(),
-                sort_type=get_filter_sort_type(sort),
-                limit=count,
-                headless=headless,
-            )
+        response_items, refreshed_cookies = await get_douyin_video_search_response(
+            search_word=keyword,
+            cookie_data=_load_douyin_cookies(),
+            sort_type=get_filter_sort_type(sort),
+            limit=count,
+            headless=headless,
         )
     except DouyinAntiSpamException as exc:
         raise RuntimeError(f"抖音风控/验证: {exc} 请先在 CLI 执行 python main.py douyin --douyin-login")
@@ -330,7 +328,7 @@ async def crawl_douyin(req: DouyinCrawlRequest):
     if not douyin_ready:
         raise HTTPException(status_code=400, detail="抖音未登录，请先在 CLI 执行 python main.py douyin --douyin-login")
     try:
-        items = _fetch_douyin(req.keyword, req.count, req.sort, req.headless)
+        items = await _fetch_douyin(req.keyword, req.count, req.sort, req.headless)
         return CrawlResponse(ok=True, platform="douyin", keyword=req.keyword, count=len(items), items=items)
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -377,9 +375,9 @@ async def crawl_all_platforms(keyword: str = Query(default="工具"), count: int
     # === Douyin: 默认 + 最新 + 最多点赞 ===
     if DOUYIN_COOKIE_PATH.exists():
         try:
-            items_default = _fetch_douyin(keyword, count, "default", headless=True)
-            items_latest = _fetch_douyin(keyword, count, "latest", headless=True)
-            items_mostlike = _fetch_douyin(keyword, count, "most_like", headless=True)
+            items_default = await _fetch_douyin(keyword, count, "default", headless=True)
+            items_latest = await _fetch_douyin(keyword, count, "latest", headless=True)
+            items_mostlike = await _fetch_douyin(keyword, count, "most_like", headless=True)
             combined = _deduplicate(items_default + items_latest + items_mostlike, ["video_url", "video_desc"])
             results.append({"platform": "douyin", "ok": True, "count": len(combined), "items": combined, "sorts": ["default", "latest", "most_like"]})
         except Exception as e:

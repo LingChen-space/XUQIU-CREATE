@@ -30,6 +30,7 @@ def _to_out(cfg: PlatformSearchConfig) -> SearchConfigOut:
         keywords=cfg.keywords,
         enabled=cfg.enabled,
         crawl_count=cfg.crawl_count,
+        proxy_url=cfg.proxy_url,
         created_at=cfg.created_at,
         updated_at=cfg.updated_at,
     )
@@ -107,6 +108,8 @@ async def update_config(
         if payload.crawl_count > 1000:
             raise HTTPException(status_code=400, detail="抓取条数不能超过1000条")
         cfg.crawl_count = payload.crawl_count
+    if payload.proxy_url is not None:
+        cfg.proxy_url = payload.proxy_url or None
 
     await db.commit()
     await db.refresh(cfg)

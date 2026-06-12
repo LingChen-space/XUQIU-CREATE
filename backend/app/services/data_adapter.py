@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """数据接入层 —— 对接监控采集微服务 API，同时保留 Mock 回退。"""
 
 import json
@@ -143,7 +143,7 @@ class DataAdapter:
             return False
 
     async def _call_monitor(
-        self, platform_key: str, keyword: str, count: int = 50,
+        self, platform_key: str, keyword: str, count: int = 50, proxy_url: str | None = None,
     ) -> list[dict]:
         """调用监控服务采集指定平台数据（支持多排序序列去重）。"""
         endpoint = MONITOR_PLATFORM_ENDPOINTS.get(platform_key)
@@ -163,8 +163,8 @@ class DataAdapter:
             ]
         elif platform_key == "taptap":
             sort_configs = [
-                {"keyword": keyword, "count": count, "sort": "default", "proxy_url": None},          # 默认列表
-                {"keyword": keyword, "count": count, "sort": "update_time,desc", "proxy_url": None},  # 最新
+                {"keyword": keyword, "count": count, "sort": "default", "proxy_url": proxy_url},          # 默认列表
+                {"keyword": keyword, "count": count, "sort": "update_time,desc", "proxy_url": proxy_url},  # 最新
             ]
         elif platform_key == "douyin":
             sort_configs = [
@@ -299,7 +299,11 @@ class DataAdapter:
     async def _fetch_from_monitor(
         self, game_ids: list[str], since: datetime | None = None,
     ) -> list[dict]:
-        """从监控服务采集真实数据。"""
+        """从监控服务采集真实数据。
+        
+        优化：先按 (platform, keyword, crawl_count) 去重调用监控，缓存结果；
+        再将结果分发到各游戏，避免每个游戏重复调用同一搜索词。
+        """
         # 获取游戏信息
         stmt = select(Game).where(Game.id.in_(game_ids))
         result = await self.session.execute(stmt)
@@ -316,24 +320,37 @@ class DataAdapter:
             logger.warning("无启用的搜索词配置，回退到 Mock")
             return await self._fetch_mock(game_ids, since)
 
-        all_contents: list[dict] = []
+        # 第一步：按 (platform, keyword, crawl_count) 去重，先调用监控采集
+        monitor_cache: dict[tuple, list[dict]] = {}
+        for cfg in configs:
+            platform_key = cfg.platform
+            if platform_key not in MONITOR_PLATFORM_ENDPOINTS:
+                continue
+            keywords = [kw.strip() for kw in cfg.keywords.split(",") if kw.strip()]
+            crawl_count = cfg.crawl_count or 50
+            proxy_url = getattr(cfg, "proxy_url", None) or None
+            for kw in keywords:
+                cache_key = (platform_key, kw, crawl_count)
+                if cache_key not in monitor_cache:
+                    items = await self._call_monitor(platform_key, kw, crawl_count, proxy_url)
+                    monitor_cache[cache_key] = items
+                    logger.info(f"[Monitor] {platform_key} '{kw}' → {len(items)}条")
 
+        # 第二步：将采集结果分发到所有游戏
+        all_contents: list[dict] = []
         for game_id in game_ids:
             game = games.get(game_id)
             if not game:
                 continue
-
             for cfg in configs:
+                platform_key = cfg.platform
+                if platform_key not in MONITOR_PLATFORM_ENDPOINTS:
+                    continue
                 keywords = [kw.strip() for kw in cfg.keywords.split(",") if kw.strip()]
                 crawl_count = cfg.crawl_count or 50
-
                 for kw in keywords:
-                    platform_key = cfg.platform
-                    if platform_key not in MONITOR_PLATFORM_ENDPOINTS:
-                        # 未对接监控采集的平台，跳过
-                        continue
-
-                    items = await self._call_monitor(platform_key, kw, crawl_count)
+                    cache_key = (platform_key, kw, crawl_count)
+                    items = monitor_cache.get(cache_key, [])
                     for item in items:
                         mapped = self._map_monitor_item(game_id, game.name, platform_key, item, kw)
                         mapped["game_id"] = game_id
@@ -342,7 +359,7 @@ class DataAdapter:
         if since:
             all_contents = [c for c in all_contents if c["published_at"] >= since]
 
-        logger.info(f"[Monitor] 总计采集 {len(all_contents)} 条内容")
+        logger.info(f"[Monitor] 总计 {len(all_contents)} 条 (来自 {len(monitor_cache)} 组平台搜索)")
         if not all_contents:
             logger.warning("监控服务未返回任何数据，回退到 Mock")
             return await self._fetch_mock(game_ids, since)
@@ -399,10 +416,26 @@ class DataAdapter:
         return all_contents
 
     async def ingest_contents(self, game_ids: list[str], since: datetime | None = None) -> int:
-        """从数据源拉取内容并写入 platform_contents 表。"""
+        """从数据源拉取内容并写入 platform_contents 表（按 URL 去重）。"""
         contents = await self.fetch_platform_contents(game_ids, since)
+        
+        # 查询已存在的 URL，避免重复写入
+        urls = set(c.get("url", "") for c in contents if c.get("url"))
+        existing_urls: set[str] = set()
+        if urls:
+            stmt = select(PlatformContent.url).where(PlatformContent.url.in_(urls))
+            result = await self.session.execute(stmt)
+            existing_urls = set(result.scalars().all())
+        
+        # 本批次内按 URL 去重（同一内容分配给多个游戏时只保留第一条）
+        seen_urls: set[str] = set(existing_urls)
         count = 0
         for c in contents:
+            url = c.get("url", "")
+            if url and url in seen_urls:
+                continue
+            if url:
+                seen_urls.add(url)
             platform_key = c.get("platform", "other").lower()
             platform_map = {e.value.lower(): e for e in ContentPlatform}
             platform_enum = next((e for k, e in platform_map.items() if k in platform_key), ContentPlatform.other)

@@ -31,6 +31,10 @@ class PlatformSearchConfig(Base):
     crawl_count: Mapped[int] = mapped_column(
         Integer, default=50, server_default="50", comment="每次抓取条数"
     )
+    proxy_url: Mapped[str | None] = mapped_column(
+        String(512), nullable=True, default=None,
+        comment="代理地址（TapTap 风控时使用）"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now()
     )
