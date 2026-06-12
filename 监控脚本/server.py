@@ -222,6 +222,7 @@ def _fetch_taptap(keyword: str, count: int, sort: str | None, proxy_url: str | N
     page_size = min(20, count)
     from_ = 0
     session_id: str | None = None
+    merged: list[dict] = []
 
     while True:
         logger.info(f"[TapTap] keyword={keyword!r} limit={page_size} from_={from_} session_id={session_id} sort={sort} proxy={proxy_url}")
@@ -235,8 +236,9 @@ def _fetch_taptap(keyword: str, count: int, sort: str | None, proxy_url: str | N
             session_id = _get_taptap_session_id(page_list)
 
         cleaned = extract_moments(resp)
-        if len(cleaned) >= count:
-            return cleaned[:count]
+        merged.extend(cleaned)
+        if len(merged) >= count:
+            return merged[:count]
 
         next_page = _get_taptap_next_page(page_list)
         if not next_page:
@@ -244,7 +246,7 @@ def _fetch_taptap(keyword: str, count: int, sort: str | None, proxy_url: str | N
         next_from = _get_taptap_from_value(next_page)
         from_ = next_from if next_from is not None else from_ + page_size
 
-    return []
+    return merged
 
 
 # ---------------------------------------------------------------------------
@@ -259,6 +261,7 @@ async def _fetch_douyin(keyword: str, count: int, sort: str, headless: bool) -> 
     )
 
     try:
+        logger.info(f"[Douyin] keyword={keyword!r} count={count} sort={sort!r} headless={headless!r}")
         response_items, refreshed_cookies = await get_douyin_video_search_response(
             search_word=keyword,
             cookie_data=_load_douyin_cookies(),
@@ -375,11 +378,22 @@ async def crawl_all_platforms(keyword: str = Query(default="工具"), count: int
     # === Douyin: 默认 + 最新 + 最多点赞 ===
     if DOUYIN_COOKIE_PATH.exists():
         try:
-            items_default = await _fetch_douyin(keyword, count, "default", headless=True)
-            items_latest = await _fetch_douyin(keyword, count, "latest", headless=True)
-            items_mostlike = await _fetch_douyin(keyword, count, "most_like", headless=True)
-            combined = _deduplicate(items_default + items_latest + items_mostlike, ["video_url", "video_desc"])
-            results.append({"platform": "douyin", "ok": True, "count": len(combined), "items": combined, "sorts": ["default", "latest", "most_like"]})
+            douyin_items: list[dict] = []
+            douyin_sorts: list[str] = []
+            for sort_name in ("default", "latest", "most_like"):
+                try:
+                    batch = await _fetch_douyin(keyword, count, sort_name, headless=False)
+                    douyin_items.extend(batch)
+                    douyin_sorts.append(sort_name)
+                    logger.info(f"[Douyin crawl-all] sort={sort_name} got {len(batch)}")
+                except Exception as exc:
+                    logger.warning(f"[Douyin crawl-all] sort={sort_name} failed: {exc}")
+                await asyncio.sleep(5)
+            if douyin_items:
+                combined = _deduplicate(douyin_items, ["video_url", "video_desc"])
+                results.append({"platform": "douyin", "ok": True, "count": len(combined), "items": combined, "sorts": douyin_sorts})
+            else:
+                results.append({"platform": "douyin", "ok": False, "error": "所有排序方式均采集失败"})
         except Exception as e:
             results.append({"platform": "douyin", "ok": False, "error": str(e)})
     else:

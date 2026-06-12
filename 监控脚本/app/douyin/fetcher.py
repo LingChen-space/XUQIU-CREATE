@@ -148,7 +148,7 @@ async def get_douyin_video_search_response(search_word: str,
 
         try:
             await page.wait_for_selector('ul[data-e2e="scroll-list"]')
-            await page.wait_for_selector("div[data-home-video-id]")
+            await page.wait_for_timeout(1500)
         except Exception as e:
             try:
                 if await page.is_visible(".captcha_container", timeout=3000):
