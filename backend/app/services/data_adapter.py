@@ -111,6 +111,40 @@ def _generate_mock_contents(game_name: str) -> list[dict]:
     return results
 
 
+
+# --- 内容清洗：判断是否与游戏工具有关 ---
+
+TOOL_RELEVANCE_KEYWORDS = [
+    # 工具类
+    "工具", "配装", "计算器", "模拟器", "地图", "抽卡", "战备", "攻略",
+    "配方", "助手", "辅助", "查询", "一键", "生成器", "制作", "合成", "分析",
+    "build", "配队", "阵容", "加点", "天赋", "装备", "武器",
+    # 福利类
+    "体验服", "资格", "兑换码", "激活码", "礼包", "福利", "限量", "抢码",
+    "测试资格", "内测", "先到先得",
+    # 数据类
+    "排行榜", "排名", "数据", "图鉴", "百科", "属性", "技能", "孵蛋",
+    # 攻略类
+    "推荐", "教学", "教程", "新手", "入门", "毕业", "成型",
+]
+
+
+def _is_tool_related(title: str, body: str) -> bool:
+    """判断内容是否与游戏工具/福利/攻略相关。"""
+    text = (title + " " + body).lower()
+    for kw in TOOL_RELEVANCE_KEYWORDS:
+        if kw.lower() in text:
+            return True
+    return False
+
+
+def _normalize_title(title: str) -> str:
+    """归一化标题用于去重比较：去空格、去特殊符号、小写。"""
+    import re
+    t = title.strip().lower()
+    t = re.sub(r'\s+', '', t)
+    t = re.sub(r'[【】\[\]「」『』""''《》（）()、，。！？…—\\-_/|\\]', '', t)
+    return t
 class DataAdapter:
     """数据接入适配器：优先调用监控采集微服务，回退到 Mock。"""
 
@@ -416,26 +450,58 @@ class DataAdapter:
         return all_contents
 
     async def ingest_contents(self, game_ids: list[str], since: datetime | None = None) -> int:
-        """从数据源拉取内容并写入 platform_contents 表（按 URL 去重）。"""
-        contents = await self.fetch_platform_contents(game_ids, since)
+        """从数据源拉取内容并写入 platform_contents 表。
         
-        # 查询已存在的 URL，避免重复写入
-        urls = set(c.get("url", "") for c in contents if c.get("url"))
+        清洗规则：
+        1. 过滤：仅保留与游戏工具/福利/攻略相关的内容
+        2. 去重：URL 去重 + 标题相似去重
+        """
+        contents = await self.fetch_platform_contents(game_ids, since)
+        logger.info(f"[Ingest] 原始采集 {len(contents)} 条")
+        
+        # 清洗步骤 1：关键词过滤，只保留工具相关
+        filtered = [c for c in contents if _is_tool_related(
+            c.get("title", ""), c.get("body", "")
+        )]
+        logger.info(f"[Ingest] 工具相关过滤后 {len(filtered)} 条 (过滤掉 {len(contents) - len(filtered)} 条)")
+        
+        if not filtered:
+            return 0
+        
+        # 清洗步骤 2：查询数据库中已存在的 URL
+        urls = set(c.get("url", "") for c in filtered if c.get("url"))
         existing_urls: set[str] = set()
         if urls:
             stmt = select(PlatformContent.url).where(PlatformContent.url.in_(urls))
             result = await self.session.execute(stmt)
             existing_urls = set(result.scalars().all())
         
-        # 本批次内按 URL 去重（同一内容分配给多个游戏时只保留第一条）
+        # 清洗步骤 3：去重 — URL 去重 + 标题归一化去重
         seen_urls: set[str] = set(existing_urls)
+        seen_titles: set[str] = set()
         count = 0
-        for c in contents:
+        dup_url = 0
+        dup_title = 0
+        
+        for c in filtered:
             url = c.get("url", "")
+            title = c.get("title", "")
+            
+            # URL 去重
             if url and url in seen_urls:
+                dup_url += 1
                 continue
+            
+            # 标题归一化去重（跨 URL 的相同内容）
+            norm_title = _normalize_title(title)
+            if norm_title and norm_title in seen_titles:
+                dup_title += 1
+                continue
+            
             if url:
                 seen_urls.add(url)
+            if norm_title:
+                seen_titles.add(norm_title)
             platform_key = c.get("platform", "other").lower()
             platform_map = {e.value.lower(): e for e in ContentPlatform}
             platform_enum = next((e for k, e in platform_map.items() if k in platform_key), ContentPlatform.other)
@@ -461,4 +527,5 @@ class DataAdapter:
             count += 1
 
         await self.session.commit()
+        logger.info(f"[Ingest] 入库 {count} 条 (URL去重 {dup_url}, 标题去重 {dup_title})")
         return count
