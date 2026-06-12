@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """数据接入层 —— 对接监控采集微服务 API，同时保留 Mock 回退。"""
 
 import json
@@ -145,37 +145,67 @@ class DataAdapter:
     async def _call_monitor(
         self, platform_key: str, keyword: str, count: int = 50,
     ) -> list[dict]:
-        """调用监控服务采集指定平台数据。"""
+        """调用监控服务采集指定平台数据（支持多排序序列去重）。"""
         endpoint = MONITOR_PLATFORM_ENDPOINTS.get(platform_key)
         if not endpoint:
             logger.warning(f"不支持的监控平台: {platform_key}")
             return []
 
-        url = f"{settings.monitor_api_base}{endpoint}"
-        # 不同平台的参数略有不同
+        # 多排序序列：每个平台采集多个排序维度的数据，去重合并
+        # TapTap: 默认列表 + 最新(update_time,desc)
+        # 黑盒: 最多点赞(award_num) + 本月默认(default,30d)
+        # 抖音: 默认 + 最新 + 最多点赞
+        sort_configs: list[dict] = []
         if platform_key == "xiaoheihe":
-            payload = {"keyword": keyword, "count": count, "time_range": "30d", "sort": "default"}
+            sort_configs = [
+                {"keyword": keyword, "count": count, "time_range": "30d", "sort": "award_num"},   # 最多点赞
+                {"keyword": keyword, "count": count, "time_range": "30d", "sort": "default"},     # 本月默认
+            ]
         elif platform_key == "taptap":
-            payload = {"keyword": keyword, "count": count, "sort": "default", "proxy_url": None}
+            sort_configs = [
+                {"keyword": keyword, "count": count, "sort": "default", "proxy_url": None},          # 默认列表
+                {"keyword": keyword, "count": count, "sort": "update_time,desc", "proxy_url": None},  # 最新
+            ]
         elif platform_key == "douyin":
-            payload = {"keyword": keyword, "count": count, "sort": "default", "headless": True}
+            sort_configs = [
+                {"keyword": keyword, "count": count, "sort": "default", "headless": True},   # 默认
+                {"keyword": keyword, "count": count, "sort": "latest", "headless": True},   # 最新
+                {"keyword": keyword, "count": count, "sort": "most_like", "headless": True},  # 最多点赞
+            ]
         else:
-            payload = {"keyword": keyword, "count": count}
+            sort_configs = [{"keyword": keyword, "count": count}]
 
-        try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                resp = await client.post(url, json=payload)
-                resp.raise_for_status()
-                data = resp.json()
-                items = data.get("items", [])
-                logger.info(f"[Monitor] {platform_key} '{keyword}' → {len(items)}条")
-                return items
-        except httpx.HTTPStatusError as e:
-            logger.warning(f"[Monitor] {platform_key} HTTP {e.response.status_code}: {e.response.text[:200]}")
-            return []
-        except Exception as e:
-            logger.warning(f"[Monitor] {platform_key} 调用失败: {e}")
-            return []
+        all_items: list[dict] = []
+        url = f"{settings.monitor_api_base}{endpoint}"
+
+        for payload in sort_configs:
+            sort_label = payload.get("sort", "default")
+            try:
+                async with httpx.AsyncClient(timeout=120.0) as client:
+                    resp = await client.post(url, json=payload)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    items = data.get("items", [])
+                    logger.info(f"[Monitor] {platform_key} '{keyword}' sort={sort_label} → {len(items)}条")
+                    all_items.extend(items)
+            except httpx.HTTPStatusError as e:
+                logger.warning(f"[Monitor] {platform_key} sort={sort_label} HTTP {e.response.status_code}: {e.response.text[:200]}")
+            except Exception as e:
+                logger.warning(f"[Monitor] {platform_key} sort={sort_label} 调用失败: {e}")
+
+        # 去重：按标题+链接去重
+        seen: set[str] = set()
+        deduped: list[dict] = []
+        for item in all_items:
+            title = item.get("title", "") or item.get("video_desc", "")
+            url_key = item.get("share_url", "") or item.get("video_url", "") or item.get("id_str", "")
+            key = f"{title}|{url_key}"
+            if key not in seen:
+                seen.add(key)
+                deduped.append(item)
+
+        logger.info(f"[Monitor] {platform_key} '{keyword}' 去重后 → {len(deduped)}条 (原始{len(all_items)}条)")
+        return deduped
 
     def _map_monitor_item(
         self, game_id: str, game_name: str, platform_key: str, item: dict, keyword: str = "",
@@ -303,7 +333,7 @@ class DataAdapter:
                         # 未对接监控采集的平台，跳过
                         continue
 
-                    items = await self._call_monitor(platform_key, kw, min(crawl_count, 100))
+                    items = await self._call_monitor(platform_key, kw, crawl_count)
                     for item in items:
                         mapped = self._map_monitor_item(game_id, game.name, platform_key, item, kw)
                         mapped["game_id"] = game_id

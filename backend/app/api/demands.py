@@ -1,4 +1,4 @@
-"""需求相关 API。"""
+﻿"""需求相关 API。"""
 
 import json
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -137,7 +137,7 @@ async def list_demands(
 async def get_history_leaderboard(
     min_score: float = Query(default=0, description="最低潜力分阈值"),
     max_days: int = Query(default=90, description="回溯天数，默认90天"),
-    limit: int = Query(default=50, le=100, description="返回条数上限"),
+    limit: int = Query(default=50, le=200, description="返回条数上限"),
     db: AsyncSession = Depends(get_db),
 ):
     """获取历史需求排行榜：按潜力分降序排列跨日期的所有需求。"""
@@ -151,7 +151,7 @@ async def get_history_leaderboard(
                 Demand.demand_date >= start_date,
                 Demand.demand_date <= today,
                 Demand.potential_score >= min_score,
-                Demand.status.notin_(["launched", "dismissed"]),
+                Demand.status.notin_(["已上线", "已驳回"]),
             )
         )
         .order_by(Demand.potential_score.desc(), Demand.demand_date.desc())

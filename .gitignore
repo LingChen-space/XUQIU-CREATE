@@ -33,3 +33,11 @@ verify_*.py
 tmp_*.py
 diagnose.py
 rebuild_pipeline.py
+
+# Log files
+*.log
+*.err
+
+# Monitor temp scripts
+监控脚本/_*.py
+监控脚本/_*.bat

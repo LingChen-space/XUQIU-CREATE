@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 """监控采集微服务 —— 对外暴露 REST API，供主后端数据适配器调用。
-
 启动方式:
   cd 监控脚本
   python server.py --port 8001
@@ -10,6 +9,15 @@
 """
 
 from __future__ import annotations
+
+import os
+# 绕过系统代理，直连 API。本机代理 127.0.0.1:7897 会导致 requests/httpx 请求超时
+os.environ["NO_PROXY"] = "*"
+os.environ["no_proxy"] = "*"
+os.environ["HTTP_PROXY"] = ""
+os.environ["HTTPS_PROXY"] = ""
+os.environ["http_proxy"] = ""
+os.environ["https_proxy"] = ""
 
 import asyncio
 import json
@@ -22,7 +30,6 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 
-# 确保当前目录在 sys.path 中，以便导入本地模块
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
@@ -43,7 +50,7 @@ DOUYIN_SORT_VALUES = ("default", "latest", "most_like")
 
 DOUYIN_COOKIE_PATH = SCRIPT_DIR / ".cloakbrowser" / "douyin-cookies.json"
 
-app = FastAPI(title="监控采集服务", version="2.0.0")
+app = FastAPI(title="监控采集服务", version="2.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,9 +60,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------------------------------------------------------------------------
-# 工具函数
-# ---------------------------------------------------------------------------
+
+def _deduplicate(items: list[dict], key_fields: list[str]) -> list[dict]:
+    seen: set[str] = set()
+    result: list[dict] = []
+    for item in items:
+        key = "|".join(str(item.get(f, "")) for f in key_fields)
+        if key and key not in seen:
+            seen.add(key)
+            result.append(item)
+    return result
+
 
 def _read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -270,7 +285,7 @@ def _fetch_douyin(keyword: str, count: int, sort: str, headless: bool) -> list[d
 
 
 # ---------------------------------------------------------------------------
-# API 端点
+# API 端点 - 单次采集
 # ---------------------------------------------------------------------------
 
 @app.get("/api/monitor/health")
@@ -324,38 +339,56 @@ async def crawl_douyin(req: DouyinCrawlRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ---------------------------------------------------------------------------
+# API 端点 - 多排序序列全平台采集
+# ---------------------------------------------------------------------------
+
 @app.post("/api/monitor/crawl-all")
-async def crawl_all_platforms(keyword: str = Query(default="工具"), count: int = Query(default=100)):
-    """一键全平台采集（小黑盒 + TapTap）。抖音需已登录。"""
+async def crawl_all_platforms(keyword: str = Query(default="工具"), count: int = Query(default=200)):
+    """一键全平台多排序序列采集。
+
+    序列规则:
+      Heybox: 最多点赞(award_num) 200条 + 本月(default,30d) 200条
+      TapTap: 默认列表 200条 + 最新(update_time,desc) 200条
+      Douyin: 默认 200条 + 最新 200条 + 最多点赞 200条
+    """
     results: list[dict] = []
 
-    # Heybox
+    # === Heybox: 最多点赞(award_num) + 本月默认(default,30d) ===
     try:
-        items = _fetch_heybox(keyword, count, "30d", "default")
-        results.append({"platform": "heybox", "ok": True, "count": len(items), "items": items})
+        items_award = _fetch_heybox(keyword, count, "30d", "award_num")
+        items_default = _fetch_heybox(keyword, count, "30d", "default")
+        combined = _deduplicate(items_award + items_default, ["title", "share_url"])
+        results.append({"platform": "heybox", "ok": True, "count": len(combined), "items": combined, "sorts": ["award_num", "default"]})
     except Exception as e:
         results.append({"platform": "heybox", "ok": False, "error": str(e)})
 
-    # TapTap
+    # === TapTap: 默认列表 + 最新(update_time,desc) ===
     try:
-        items = _fetch_taptap(keyword, count, None, None)
-        results.append({"platform": "taptap", "ok": True, "count": len(items), "items": items})
+        items_default = _fetch_taptap(keyword, count, None, None)
+        items_latest = _fetch_taptap(keyword, count, "update_time,desc", None)
+        combined = _deduplicate(items_default + items_latest, ["title", "id_str"])
+        results.append({"platform": "taptap", "ok": True, "count": len(combined), "items": combined, "sorts": ["default", "update_time,desc"]})
     except TapTapRiskControlError as e:
         results.append({"platform": "taptap", "ok": False, "error": str(e)})
     except Exception as e:
         results.append({"platform": "taptap", "ok": False, "error": str(e)})
 
-    # Douyin (如果已登录)
+    # === Douyin: 默认 + 最新 + 最多点赞 ===
     if DOUYIN_COOKIE_PATH.exists():
         try:
-            items = _fetch_douyin(keyword, count, "default", headless=True)
-            results.append({"platform": "douyin", "ok": True, "count": len(items), "items": items})
+            items_default = _fetch_douyin(keyword, count, "default", headless=True)
+            items_latest = _fetch_douyin(keyword, count, "latest", headless=True)
+            items_mostlike = _fetch_douyin(keyword, count, "most_like", headless=True)
+            combined = _deduplicate(items_default + items_latest + items_mostlike, ["video_url", "video_desc"])
+            results.append({"platform": "douyin", "ok": True, "count": len(combined), "items": combined, "sorts": ["default", "latest", "most_like"]})
         except Exception as e:
             results.append({"platform": "douyin", "ok": False, "error": str(e)})
     else:
         results.append({"platform": "douyin", "ok": False, "error": "未登录"})
 
-    return {"ok": True, "keyword": keyword, "results": results}
+    total = sum(r.get("count", 0) for r in results if r.get("ok"))
+    return {"ok": True, "keyword": keyword, "total_items": total, "results": results}
 
 
 if __name__ == "__main__":
@@ -367,5 +400,5 @@ if __name__ == "__main__":
     parser.add_argument("--host", type=str, default="127.0.0.1", help="绑定地址 (default: 127.0.0.1)")
     args = parser.parse_args()
 
-    logger.info(f"启动监控采集服务 → http://{args.host}:{args.port}")
-    uvicorn.run("server:app", host=args.host, port=args.port, reload=True, log_level="info")
+    logger.info(f"启动监控采集服务 -> http://{args.host}:{args.port}")
+    uvicorn.run("server:app", host=args.host, port=args.port, reload=False, log_level="info")

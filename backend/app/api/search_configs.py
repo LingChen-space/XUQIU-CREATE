@@ -1,4 +1,4 @@
-"""搜索词配置 API — 每款游戏多平台搜索关键词管理。"""
+"""搜索词配置 API — 每次游戏多平台搜索关键词管理。"""
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -59,14 +59,15 @@ async def create_config(
 ):
     """为指定游戏新增一个平台的搜索词配置。"""
 
-    # 检查是否已有同平台配置
+    # 检查是否已有同平台全局配置（game_id IS NULL）
     existing = await db.execute(
         select(PlatformSearchConfig).where(
             PlatformSearchConfig.platform == payload.platform,
+            PlatformSearchConfig.game_id.is_(None),
         )
     )
     if existing.scalar():
-        raise HTTPException(status_code=409, detail=f"该游戏已存在 {PLATFORM_LABELS.get(payload.platform, payload.platform)} 平台的搜索词配置")
+        raise HTTPException(status_code=409, detail=f"已存在 {PLATFORM_LABELS.get(payload.platform, payload.platform)} 平台的全局搜索词配置")
 
     cfg = PlatformSearchConfig(
         platform=payload.platform,
