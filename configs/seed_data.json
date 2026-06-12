@@ -1,0 +1,145 @@
+{
+  "description": "需求发生工具 - 游戏管理和搜索词配置种子数据",
+  "exported_at": "2026-06-12",
+  "games": [
+    {
+      "id": "c784f953-fb68-4b86-bfa6-810e4837f1b1",
+      "name": "三角洲行动",
+      "genre": "fps",
+      "publisher": "腾讯",
+      "status": "operating",
+      "haoyou_id": "",
+      "cover_url": "",
+      "description": "腾讯天美工作室出品的战术射击手游",
+      "notes": ""
+    },
+    {
+      "id": "abe54c93-b2d7-411f-a2b0-995b550778fa",
+      "name": "原神",
+      "genre": "open_world",
+      "publisher": "米哈游",
+      "status": "operating",
+      "haoyou_id": "",
+      "cover_url": "",
+      "description": "开放世界冒险RPG",
+      "notes": ""
+    },
+    {
+      "id": "2cd34ed8-697a-4d01-a344-8ccc124fdb78",
+      "name": "鸣潮",
+      "genre": "open_world",
+      "publisher": "库洛游戏",
+      "status": "operating",
+      "haoyou_id": "",
+      "cover_url": "",
+      "description": "开放世界动作RPG",
+      "notes": ""
+    },
+    {
+      "id": "7a7b77fc-0a6c-42a7-b304-f7cbcaf01c1a",
+      "name": "火影忍者",
+      "genre": "rpg",
+      "publisher": "腾讯",
+      "status": "operating",
+      "haoyou_id": "",
+      "cover_url": "",
+      "description": "火影忍者正版授权格斗手游",
+      "notes": ""
+    },
+    {
+      "id": "8ed18bc7-206e-4598-b720-a15b679c79ee",
+      "name": "洛克王国：世界",
+      "genre": "rpg",
+      "publisher": "腾讯",
+      "status": "testing",
+      "haoyou_id": "",
+      "cover_url": "",
+      "description": "洛克王国IP开放世界新作",
+      "notes": ""
+    },
+    {
+      "id": "7ab70acd-2ca9-4a05-b0da-304718d1cdb5",
+      "name": "崩坏：星穹铁道",
+      "genre": "rpg",
+      "publisher": "米哈游",
+      "status": "operating",
+      "haoyou_id": "",
+      "cover_url": "",
+      "description": "银河冒险RPG",
+      "notes": ""
+    },
+    {
+      "id": "5a129262-74c0-491f-bf6a-15d4adaa7e40",
+      "name": "永劫无间手游",
+      "genre": "battle_royale",
+      "publisher": "网易",
+      "status": "operating",
+      "haoyou_id": "",
+      "cover_url": "",
+      "description": "冷兵器吃鸡手游",
+      "notes": ""
+    },
+    {
+      "id": "195d75aa-617c-4a0b-aef7-a48d9882be06",
+      "name": "绝区零",
+      "genre": "rpg",
+      "publisher": "米哈游",
+      "status": "operating",
+      "haoyou_id": "",
+      "cover_url": "",
+      "description": "都市幻想动作RPG",
+      "notes": ""
+    },
+    {
+      "id": "eb44c53e-de26-41c0-b1e7-cece633780a2",
+      "name": "失控进化",
+      "genre": "open_world",
+      "publisher": "腾讯",
+      "status": "operating",
+      "haoyou_id": "",
+      "cover_url": "",
+      "description": "",
+      "notes": ""
+    },
+    {
+      "id": "314ee25b-c894-4286-a975-ea686e46d3fe",
+      "name": "异环",
+      "genre": "other",
+      "publisher": "",
+      "status": "operating",
+      "haoyou_id": "",
+      "cover_url": "",
+      "description": "",
+      "notes": ""
+    }
+  ],
+  "platform_search_configs": [
+    {
+      "id": "6a0460a4-98e5-4ebb-9547-47e1c3ba4d1b",
+      "game_id": null,
+      "platform": "taptap",
+      "keywords": "工具,体验服",
+      "enabled": 1,
+      "crawl_count": 200,
+      "proxy_url": null
+    },
+    {
+      "id": "9c8667a6-ec28-4452-b75b-8fd3910b218b",
+      "game_id": null,
+      "platform": "xiaoheihe",
+      "keywords": "工具",
+      "enabled": 1,
+      "crawl_count": 200,
+      "proxy_url": null
+    },
+    {
+      "id": "86301cef-af7c-4b5c-bca2-921a9f1d0c86",
+      "game_id": null,
+      "platform": "douyin",
+      "keywords": "洛克王国世界工具,三角洲行动工具,失控进化工具,体验服",
+      "enabled": 1,
+      "crawl_count": 40,
+      "proxy_url": null
+    }
+  ]
+}
