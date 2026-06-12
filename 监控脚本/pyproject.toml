@@ -1,0 +1,12 @@
+[project]
+name = "kb-req-research-20260611"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "cloakbrowser>=0.3.31",
+    "gmssl>=3.2.2",
+    "playwright>=1.60.0",
+    "requests>=2.34.2",
+]

@@ -29,6 +29,7 @@ def _to_out(cfg: PlatformSearchConfig) -> SearchConfigOut:
         platform=cfg.platform,
         keywords=cfg.keywords,
         enabled=cfg.enabled,
+        crawl_count=cfg.crawl_count,
         created_at=cfg.created_at,
         updated_at=cfg.updated_at,
     )
@@ -42,13 +43,10 @@ async def list_platforms():
 
 @router.get("", response_model=list[SearchConfigOut])
 async def list_configs(
-    game_id: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     """获取搜索词配置列表，可按游戏筛选。"""
     stmt = select(PlatformSearchConfig).order_by(PlatformSearchConfig.platform)
-    if game_id:
-        stmt = stmt.where(PlatformSearchConfig.game_id == game_id)
     result = await db.execute(stmt)
     configs = result.scalars().all()
     return [_to_out(c) for c in configs]
@@ -57,20 +55,13 @@ async def list_configs(
 @router.post("", response_model=SearchConfigOut, status_code=201)
 async def create_config(
     payload: SearchConfigCreate,
-    game_id: str,
     db: AsyncSession = Depends(get_db),
 ):
     """为指定游戏新增一个平台的搜索词配置。"""
-    # 验证游戏存在
-    game_stmt = select(Game).where(Game.id == game_id)
-    game_result = await db.execute(game_stmt)
-    if not game_result.scalar():
-        raise HTTPException(status_code=404, detail="游戏不存在")
 
     # 检查是否已有同平台配置
     existing = await db.execute(
         select(PlatformSearchConfig).where(
-            PlatformSearchConfig.game_id == game_id,
             PlatformSearchConfig.platform == payload.platform,
         )
     )
@@ -78,10 +69,10 @@ async def create_config(
         raise HTTPException(status_code=409, detail=f"该游戏已存在 {PLATFORM_LABELS.get(payload.platform, payload.platform)} 平台的搜索词配置")
 
     cfg = PlatformSearchConfig(
-        game_id=game_id,
         platform=payload.platform,
         keywords=payload.keywords,
         enabled=payload.enabled,
+        crawl_count=payload.crawl_count,
     )
     db.add(cfg)
     await db.commit()
@@ -109,6 +100,12 @@ async def update_config(
         cfg.keywords = cleaned
     if payload.enabled is not None:
         cfg.enabled = payload.enabled
+    if payload.crawl_count is not None:
+        if payload.crawl_count < 10:
+            raise HTTPException(status_code=400, detail="抓取条数不能少于10条")
+        if payload.crawl_count > 1000:
+            raise HTTPException(status_code=400, detail="抓取条数不能超过1000条")
+        cfg.crawl_count = payload.crawl_count
 
     await db.commit()
     await db.refresh(cfg)

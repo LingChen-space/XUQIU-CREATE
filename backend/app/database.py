@@ -25,3 +25,8 @@ async def init_db():
     """创建所有表。"""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # 迁移: 为已存在的 platform_search_configs 表添加 crawl_count 列
+        try:
+            await conn.run_sync(lambda c: c.execute("ALTER TABLE platform_search_configs ADD COLUMN crawl_count INTEGER NOT NULL DEFAULT 50"))
+        except Exception:
+            pass  # 列已存在则忽略

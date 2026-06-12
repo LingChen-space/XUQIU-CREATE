@@ -9,6 +9,7 @@ class SearchConfigCreate(BaseModel):
     platform: str  # douyin / taptap / xiaoheihe / bilibili
     keywords: str  # comma-separated
     enabled: bool = True
+    crawl_count: int = 50
 
     @field_validator("platform")
     @classmethod
@@ -26,20 +27,31 @@ class SearchConfigCreate(BaseModel):
             raise ValueError("至少需要一个搜索关键词")
         return cleaned
 
+    @field_validator("crawl_count")
+    @classmethod
+    def validate_crawl_count(cls, v: int) -> int:
+        if v < 10:
+            raise ValueError("抓取条数不能少于10条")
+        if v > 1000:
+            raise ValueError("抓取条数不能超过1000条")
+        return v
+
 
 class SearchConfigUpdate(BaseModel):
     """更新搜索词配置。"""
     keywords: str | None = None
     enabled: bool | None = None
+    crawl_count: int | None = None
 
 
 class SearchConfigOut(BaseModel):
     """搜索词配置输出。"""
     id: str
-    game_id: str
+    game_id: str | None = None
     platform: str
     keywords: str
     enabled: bool
+    crawl_count: int
     created_at: datetime
     updated_at: datetime
 

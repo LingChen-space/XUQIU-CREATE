@@ -1,4 +1,4 @@
-﻿"""应用配置，支持 .env 覆盖。"""
+"""应用配置，支持 .env 覆盖。"""
 
 from pydantic_settings import BaseSettings
 from pathlib import Path
@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # 现有爬虫体系 API
     crawler_api_base: str = "http://localhost:8001/api/v1"
     crawler_api_key: str = ""
+
+    # 监控采集微服务（本机）
+    monitor_api_base: str = "http://127.0.0.1:8001/api/monitor"
 
     # LLM API（用户提供）
     llm_api_base: str = "https://api.openai.com/v1"

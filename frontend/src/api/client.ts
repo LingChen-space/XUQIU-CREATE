@@ -1,4 +1,5 @@
 import type { HistoryLeaderboardOut } from '../types'
+import type { MonitorContentList, ContentStats } from '../types'
 
 const BASE = '/api'
 
@@ -39,14 +40,17 @@ export const api = {
   health: () => request<any>('/health'),
   // 搜索词配置
   getSearchConfigPlatforms: () => request<any[]>('/search-configs/platforms'),
-  getSearchConfigs: (gameId?: string) => {
-    const qs = gameId ? '?game_id=' + encodeURIComponent(gameId) : ''
-    return request<any[]>(`/search-configs${qs}`)
-  },
-  createSearchConfig: (gameId: string, data: { platform: string; keywords: string; enabled?: boolean }) =>
-    request<any>(`/search-configs?game_id=${encodeURIComponent(gameId)}`, { method: 'POST', body: JSON.stringify(data) }),
-  updateSearchConfig: (configId: string, data: { keywords?: string; enabled?: boolean }) =>
+  getSearchConfigs: () => request<any[]>('/search-configs'),
+  createSearchConfig: (data: { platform: string; keywords: string; enabled?: boolean; crawl_count?: number }) =>
+    request<any>('/search-configs', { method: 'POST', body: JSON.stringify(data) }),
+  updateSearchConfig: (configId: string, data: { keywords?: string; enabled?: boolean; crawl_count?: number }) =>
     request<any>(`/search-configs/${configId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteSearchConfig: (configId: string) =>
     request<any>(`/search-configs/${configId}`, { method: 'DELETE' }),
+  // 监控数据
+  getContents: (params: Record<string, string> = {}) => {
+    const qs = new URLSearchParams(params).toString()
+    return request<MonitorContentList>(`/contents${qs ? '?' + qs : ''}`)
+  },
+  getContentStats: (days = 7) => request<ContentStats>(`/contents/stats?days=${days}`),
 }

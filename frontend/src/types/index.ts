@@ -123,10 +123,42 @@ export interface PlatformOption {
 
 export interface SearchConfig {
   id: string
-  game_id: string
+  game_id: string | null
   platform: string
   keywords: string
   enabled: boolean
+  crawl_count: number
   created_at: string
   updated_at: string
+}
+export interface MonitorContent {
+  id: string
+  game_id: string
+  platform: string
+  content_type: string
+  url: string
+  title: string
+  body: string
+  author: string
+  view_count: number
+  like_count: number
+  comment_count: number
+  share_count: number
+  hot_score: number
+  published_at: string
+  collected_at: string
+}
+
+export interface MonitorContentList {
+  total: number
+  offset: number
+  limit: number
+  items: MonitorContent[]
+}
+
+export interface ContentStats {
+  total: number
+  days: number
+  by_platform: Record<string, number>
+  by_date: { date: string; count: number }[]
 }

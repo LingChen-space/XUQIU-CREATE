@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime
-from sqlalchemy import String, DateTime, Boolean, ForeignKey, func, Text
+from sqlalchemy import String, DateTime, Boolean, ForeignKey, func, Text, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.sqlite import TEXT
 
@@ -17,7 +17,7 @@ class PlatformSearchConfig(Base):
     )
     game_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("games.id", ondelete="CASCADE"),
-        nullable=False, index=True, comment="关联游戏"
+        nullable=True, default=None, index=True, comment="关联游戏(全局配置时为NULL)"
     )
     platform: Mapped[str] = mapped_column(
         String(32), nullable=False, comment="平台标识: douyin/taptap/xiaoheihe/bilibili..."
@@ -27,6 +27,9 @@ class PlatformSearchConfig(Base):
     )
     enabled: Mapped[bool] = mapped_column(
         Boolean, default=True, comment="是否启用"
+    )
+    crawl_count: Mapped[int] = mapped_column(
+        Integer, default=50, server_default="50", comment="每次抓取条数"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now()

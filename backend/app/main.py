@@ -1,5 +1,4 @@
-"""需求发生工具 — FastAPI 主入口。
-
+"""需求发生工具 —— FastAPI 主入口。
 启动方式: uvicorn app.main:app --reload --port 8000
 """
 
@@ -20,6 +19,9 @@ from app.api.demands import router as demands_router
 from app.api.reports import router as reports_router
 from app.api.dashboard import router as dashboard_router
 from app.api.search_configs import router as search_configs_router
+from app.api.monitor import router as monitor_router
+
+from app.api.contents import router as contents_router
 
 logging.basicConfig(
     level=logging.INFO if not settings.debug else logging.DEBUG,
@@ -85,6 +87,9 @@ app.include_router(demands_router)
 app.include_router(reports_router)
 app.include_router(dashboard_router)
 app.include_router(search_configs_router)
+app.include_router(monitor_router)
+
+app.include_router(contents_router)
 
 
 @app.get("/api/health")
@@ -95,7 +100,7 @@ async def health_check():
 
 @app.post("/api/pipeline/run")
 async def trigger_pipeline():
-    """手动触发一次完整分析管线（用于测试和演示）。"""
+    """手动触发一次完整分析管线。"""
     from app.services.scheduler import run_daily_pipeline
     await run_daily_pipeline()
     return {"ok": True, "message": "管线执行完成"}
