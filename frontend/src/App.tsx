@@ -40,8 +40,8 @@ function App() {
           <div className="brand-logo-row">
             <img src="/hykb-logo.png" alt="好游快爆" className="brand-logo" />
             <div className="brand-text">
-          <h1>需求发生工具</h1>
-          <div className="subtitle">好游快爆 · 智能挖掘</div>
+          <h1>需求挖掘Agent</h1>
+          <div className="subtitle">好游快爆 · 智能挖掘 by 拓展组</div>
             </div>
           </div>
         </div>
