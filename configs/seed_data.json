@@ -121,7 +121,7 @@
       "keywords": "工具,体验服",
       "enabled": 1,
       "crawl_count": 200,
-      "proxy_url": null
+      "proxy_url": "http://127.0.0.1:7897"
     },
     {
       "id": "9c8667a6-ec28-4452-b75b-8fd3910b218b",
