@@ -162,3 +162,25 @@ export interface ContentStats {
   by_platform: Record<string, number>
   by_date: { date: string; count: number }[]
 }
+
+export interface CrawlProgressRecord {
+  id: string
+  platform: string
+  keyword: string
+  crawl_count: number
+  status: "pending" | "running" | "completed" | "failed"
+  items_fetched: number
+  items_ingested: number
+  error_msg: string | null
+  started_at: string | null
+  completed_at: string | null
+}
+
+export interface CrawlProgress {
+  total: number
+  completed: number
+  failed: number
+  running: number
+  pending: number
+  records: CrawlProgressRecord[]
+}

@@ -7,6 +7,8 @@ from pydantic import BaseModel
 import httpx
 
 from app.config import settings
+from app.database import async_session
+from app.services.data_adapter import DataAdapter
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/monitor", tags=["monitor"])
@@ -43,6 +45,61 @@ async def trigger_crawl_all(req: CrawlAllRequest):
         raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"监控服务不可用: {e}")
+
+
+class RetryRequest(BaseModel):
+    platform: str
+    keyword: str
+    crawl_count: int = 50
+
+
+@router.get("/crawl/progress")
+async def get_crawl_progress():
+    """获取采集进度：所有 (平台, 关键词) 组合的状态。"""
+    async with async_session() as session:
+        try:
+            adapter = DataAdapter(session)
+            records = await adapter.get_progress()
+            total = len(records)
+            completed = sum(1 for r in records if r["status"] == "completed")
+            failed = sum(1 for r in records if r["status"] == "failed")
+            running = sum(1 for r in records if r["status"] == "running")
+            pending = sum(1 for r in records if r["status"] == "pending")
+            return {
+                "total": total,
+                "completed": completed,
+                "failed": failed,
+                "running": running,
+                "pending": pending,
+                "records": records,
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"查询进度失败: {e}")
+
+
+@router.post("/crawl/retry")
+async def retry_crawl(req: RetryRequest):
+    """手动重试某个 (平台, 关键词) 组合的采集。"""
+    from sqlalchemy import select
+    from app.models.game import Game, GameStatus
+    async with async_session() as session:
+        adapter = DataAdapter(session)
+        if adapter.use_mock:
+            raise HTTPException(status_code=400, detail="Mock 模式下不支持重试")
+
+        # 获取活跃游戏
+        stmt = select(Game.id).where(Game.status != GameStatus.inactive)
+        result = await session.execute(stmt)
+        game_ids = [row[0] for row in result.all()]
+
+        if not game_ids:
+            raise HTTPException(status_code=400, detail="无活跃游戏")
+
+        try:
+            r = await adapter.ingest_single(req.platform, req.keyword, game_ids, req.crawl_count)
+            return r
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"重试失败: {e}")
 
 
 @router.post("/heybox")

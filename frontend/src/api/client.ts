@@ -1,5 +1,6 @@
 import type { HistoryLeaderboardOut } from '../types'
 import type { MonitorContentList, ContentStats } from '../types'
+import type { CrawlProgress } from '../types'
 
 const BASE = '/api'
 
@@ -53,4 +54,12 @@ export const api = {
     return request<MonitorContentList>(`/contents${qs ? '?' + qs : ''}`)
   },
   getContentStats: (days = 7) => request<ContentStats>(`/contents/stats?days=${days}`),
+
+  // 采集进度
+  getCrawlProgress: () => request<CrawlProgress>('/monitor/crawl/progress'),
+  retryCrawl: (platform: string, keyword: string, crawlCount = 50) =>
+    request<any>('/monitor/crawl/retry', {
+      method: 'POST',
+      body: JSON.stringify({ platform, keyword, crawl_count: crawlCount }),
+    }),
 }
