@@ -202,9 +202,9 @@ class DataAdapter:
             ]
         elif platform_key == "douyin":
             sort_configs = [
-                {"keyword": keyword, "count": count, "sort": "default", "headless": True},   # 默认
-                {"keyword": keyword, "count": count, "sort": "latest", "headless": True},   # 最新
-                {"keyword": keyword, "count": count, "sort": "most_like", "headless": True},  # 最多点赞
+                {"keyword": keyword, "count": count, "sort": "default", "headless": False},   # 默认
+                {"keyword": keyword, "count": count, "sort": "latest", "headless": False},   # 最新
+                {"keyword": keyword, "count": count, "sort": "most_like", "headless": False},  # 最多点赞
             ]
         else:
             sort_configs = [{"keyword": keyword, "count": count}]

@@ -86,7 +86,7 @@ async def trigger_douyin(keyword: str = Query(default="工具"), count: int = Qu
         async with httpx.AsyncClient(timeout=120.0) as client:
             resp = await client.post(
                 f"{settings.monitor_api_base}/douyin",
-                json={"keyword": keyword, "count": count, "sort": "default", "headless": True},
+                json={"keyword": keyword, "count": count, "sort": "default", "headless": False},
             )
             resp.raise_for_status()
             return resp.json()
