@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.game import Game, GameGenre, GameStatus
+from app.models.game import Game, GameGenre, GameStatus, default_priority_weight
 from app.schemas.game import GameCreate, GameUpdate, GameOut
 
 router = APIRouter(prefix="/api/games", tags=["games"])
@@ -21,6 +21,7 @@ def _game_to_out(game: Game) -> GameOut:
         status=game.status.value if game.status else "",
         haoyou_id=game.haoyou_id or "",
         cover_url=game.cover_url or "",
+        priority_weight=game.priority_weight or 1,
         description=game.description or "",
         notes=game.notes or "",
         created_at=game.created_at,
@@ -40,7 +41,7 @@ async def list_games(
         stmt = stmt.where(Game.status == status)
     if genre:
         stmt = stmt.where(Game.genre == genre)
-    stmt = stmt.order_by(Game.name)
+    stmt = stmt.order_by(Game.priority_weight.desc(), Game.name)
 
     result = await db.execute(stmt)
     games = result.scalars().all()
@@ -74,6 +75,7 @@ async def create_game(payload: GameCreate, db: AsyncSession = Depends(get_db)):
         status=status_enum,
         haoyou_id=payload.haoyou_id or "",
         cover_url=payload.cover_url or "",
+        priority_weight=payload.priority_weight or default_priority_weight(payload.name),
         description=payload.description or "",
         notes=payload.notes or "",
     )
@@ -108,6 +110,10 @@ async def update_game(game_id: str, payload: GameUpdate, db: AsyncSession = Depe
         game.haoyou_id = payload.haoyou_id
     if payload.cover_url is not None:
         game.cover_url = payload.cover_url
+    if payload.priority_weight is not None:
+        if payload.priority_weight < 1 or payload.priority_weight > 5:
+            raise HTTPException(status_code=400, detail="游戏权重需在 1-5 之间")
+        game.priority_weight = payload.priority_weight
     if payload.description is not None:
         game.description = payload.description
     if payload.notes is not None:

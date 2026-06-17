@@ -39,7 +39,11 @@ async def run_daily_pipeline(force_recrawl: bool = False):
             adapter = DataAdapter(session)
 
             # 获取所有活跃游戏（非已停运）
-            stmt = select(Game).where(Game.status != GameStatus.inactive)
+            stmt = (
+                select(Game)
+                .where(Game.status != GameStatus.inactive)
+                .order_by(Game.priority_weight.desc(), Game.name)
+            )
             result = await session.execute(stmt)
             games = result.scalars().all()
             game_ids = [g.id for g in games]

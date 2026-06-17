@@ -2,12 +2,22 @@
 
 import uuid
 from datetime import datetime
-from sqlalchemy import String, DateTime, Enum as SAEnum, func
+from sqlalchemy import String, DateTime, Enum as SAEnum, Integer, func
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.sqlite import TEXT
 import enum
 
 from app.database import Base
+
+
+PRIORITY_GAME_NAMES = {"三角洲行动", "洛克王国：世界", "洛克王国世界", "失控进化"}
+
+
+def default_priority_weight(name: str) -> int:
+    """重点游戏默认使用更高挖掘权重。"""
+    normalized = (name or "").replace("：", "").replace(":", "").strip()
+    priority_names = {item.replace("：", "").replace(":", "") for item in PRIORITY_GAME_NAMES}
+    return 3 if normalized in priority_names else 1
 
 
 class GameStatus(str, enum.Enum):
@@ -42,6 +52,7 @@ class Game(Base):
     status: Mapped[GameStatus] = mapped_column(SAEnum(GameStatus), nullable=False, default=GameStatus.operating, comment="\u4e0a\u7ebf\u72b6\u6001")
     haoyou_id: Mapped[str] = mapped_column(String(64), default="", comment="\u597d\u6e38\u5feb\u7206\u5185\u90e8ID")
     cover_url: Mapped[str] = mapped_column(String(512), default="", comment="\u5c01\u9762\u56feURL")
+    priority_weight: Mapped[int] = mapped_column(Integer, default=1, comment="搜索和需求挖掘优先级权重(1-5)")
     description: Mapped[str] = mapped_column(TEXT, default="", comment="\u6e38\u620f\u7b80\u4ecb")
     notes: Mapped[str] = mapped_column(TEXT, default="", comment="\u7f16\u8f91\u5907\u6ce8")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

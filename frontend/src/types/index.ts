@@ -86,6 +86,7 @@ export interface Game {
   status: string
   haoyou_id: string
   cover_url: string
+  priority_weight: number
   description: string
   notes: string
   created_at: string

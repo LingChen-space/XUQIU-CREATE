@@ -4,7 +4,9 @@ from types import SimpleNamespace
 import unittest
 
 from app.models.platform_content import ContentType
+from app.models.game import default_priority_weight
 from app.services.data_adapter import DataAdapter
+from app.services.llm_pipeline import LLMPipeline
 from app.services.signal_engine import SignalEngine
 from app.utils.engagement import compute_content_hot_score
 from app.utils.keyword_matcher import detect_external_platform_tools
@@ -83,6 +85,39 @@ class SignalEvaluationTest(unittest.TestCase):
 
         self.assertEqual(mapped["comment_count"], 85)
         self.assertGreater(mapped["hot_score"], 0)
+
+    def test_repeat_question_and_content_heat_have_higher_fallback_weight(self):
+        pipeline = LLMPipeline.__new__(LLMPipeline)
+
+        repeat_analysis = pipeline._fallback_analysis(
+            SimpleNamespace(name="普通游戏", priority_weight=1),
+            {"重复提问密度": 90},
+        )
+        heat_analysis = pipeline._fallback_analysis(
+            SimpleNamespace(name="普通游戏", priority_weight=1),
+            {"内容热度": 90},
+        )
+
+        self.assertGreaterEqual(repeat_analysis["potential_score"], 35)
+        self.assertGreaterEqual(heat_analysis["potential_score"], 30)
+
+    def test_priority_games_get_default_weight_and_score_boost(self):
+        pipeline = LLMPipeline.__new__(LLMPipeline)
+        signals = {"重复提问密度": 70, "内容热度": 70}
+
+        normal = pipeline._fallback_analysis(
+            SimpleNamespace(name="普通游戏", priority_weight=1),
+            signals,
+        )
+        priority = pipeline._fallback_analysis(
+            SimpleNamespace(name="三角洲行动", priority_weight=default_priority_weight("三角洲行动")),
+            signals,
+        )
+
+        self.assertEqual(default_priority_weight("三角洲行动"), 3)
+        self.assertEqual(default_priority_weight("洛克王国：世界"), 3)
+        self.assertEqual(default_priority_weight("失控进化"), 3)
+        self.assertGreater(priority["potential_score"], normal["potential_score"])
 
 
 if __name__ == "__main__":

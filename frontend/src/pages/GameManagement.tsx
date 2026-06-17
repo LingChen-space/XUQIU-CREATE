@@ -40,11 +40,17 @@ export default function GameManagement({ onCountChange }: Props) {
   const handleSave = async (form: Record<string, string>) => {
     setSaving(true)
     setError("")
+    const payload: Record<string, string | number> = { ...form }
+    if (payload.priority_weight === "") {
+      delete payload.priority_weight
+    } else {
+      payload.priority_weight = Number(payload.priority_weight)
+    }
     try {
       if (editingGame) {
-        await api.updateGame(editingGame.id, form)
+        await api.updateGame(editingGame.id, payload)
       } else {
-        await api.createGame(form)
+        await api.createGame(payload)
       }
       setShowForm(false)
       await fetchGames()
@@ -137,6 +143,7 @@ export default function GameManagement({ onCountChange }: Props) {
                 <th>品类</th>
                 <th>厂商</th>
                 <th>状态</th>
+                <th style={{ textAlign: "center" }}>权重</th>
                 <th>备注</th>
                 <th style={{ textAlign: "center", width: 100 }}>操作</th>
               </tr>
@@ -150,6 +157,22 @@ export default function GameManagement({ onCountChange }: Props) {
                   <td>
                     <span className={`game-status-tag ${STATUS_CLASS[g.status] || "inactive"}`}>
                       {g.status}
+                    </span>
+                  </td>
+                  <td style={{ textAlign: "center" }}>
+                    <span style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      minWidth: 34,
+                      height: 24,
+                      borderRadius: 6,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: (g.priority_weight || 1) >= 3 ? "var(--primary)" : "var(--text-secondary)",
+                      background: (g.priority_weight || 1) >= 3 ? "var(--primary-light)" : "#f3f4f6",
+                    }}>
+                      {g.priority_weight || 1}x
                     </span>
                   </td>
                   <td style={{ color: "var(--text-muted)", fontSize: 12, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -230,6 +253,7 @@ function GameFormModal({ game, onSave, onClose, saving, error }: {
     status: game?.status || "在运营",
     haoyou_id: game?.haoyou_id || "",
     cover_url: game?.cover_url || "",
+    priority_weight: game ? String(game.priority_weight || 1) : "",
     description: game?.description || "",
     notes: game?.notes || "",
   })
@@ -272,6 +296,17 @@ function GameFormModal({ game, onSave, onClose, saving, error }: {
               <label>封面图 URL</label>
               <input className="form-input" value={form.cover_url} onChange={(e) => set("cover_url", e.target.value)} placeholder="https://..." />
             </div>
+          </div>
+          <div className="form-group">
+            <label>搜索和需求挖掘权重</label>
+            <select className="form-input" value={form.priority_weight} onChange={(e) => set("priority_weight", e.target.value)}>
+              {!game && <option value="">自动识别重点游戏</option>}
+              <option value="1">1x 常规</option>
+              <option value="2">2x 较高</option>
+              <option value="3">3x 重点</option>
+              <option value="4">4x 高重点</option>
+              <option value="5">5x 最高</option>
+            </select>
           </div>
           <div className="form-group">
             <label>简介</label>

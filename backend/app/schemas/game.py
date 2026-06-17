@@ -12,6 +12,7 @@ class GameCreate(BaseModel):
     status: str = "在运营"
     haoyou_id: str = ""
     cover_url: str = ""
+    priority_weight: int | None = None
     description: str = ""
     notes: str = ""
 
@@ -23,6 +24,15 @@ class GameCreate(BaseModel):
             raise ValueError(f"无效状态: {v}，可选: {valid}")
         return v
 
+    @field_validator("priority_weight")
+    @classmethod
+    def validate_priority_weight(cls, v: int | None) -> int | None:
+        if v is None:
+            return v
+        if v < 1 or v > 5:
+            raise ValueError("游戏权重需在 1-5 之间")
+        return v
+
 
 class GameUpdate(BaseModel):
     name: Optional[str] = None
@@ -31,6 +41,7 @@ class GameUpdate(BaseModel):
     status: Optional[str] = None
     haoyou_id: Optional[str] = None
     cover_url: Optional[str] = None
+    priority_weight: Optional[int] = None
     description: Optional[str] = None
     notes: Optional[str] = None
 
@@ -43,6 +54,7 @@ class GameOut(BaseModel):
     status: str
     haoyou_id: str
     cover_url: str
+    priority_weight: int
     description: str
     notes: str
     created_at: datetime

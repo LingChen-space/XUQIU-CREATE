@@ -38,5 +38,13 @@ async def init_db():
             await conn.run_sync(lambda c: c.exec_driver_sql("ALTER TABLE crawl_progress ADD COLUMN result_detail TEXT"))
         except Exception:
             pass
+        try:
+            await conn.run_sync(lambda c: c.exec_driver_sql("ALTER TABLE games ADD COLUMN priority_weight INTEGER NOT NULL DEFAULT 1"))
+        except Exception:
+            pass
+        await conn.run_sync(lambda c: c.exec_driver_sql(
+            "UPDATE games SET priority_weight = 3 "
+            "WHERE priority_weight = 1 AND name IN ('三角洲行动', '洛克王国：世界', '洛克王国世界', '失控进化')"
+        ))
         await conn.run_sync(lambda c: c.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_platform_contents_source_id ON platform_contents (source_id)"))
         await conn.run_sync(lambda c: c.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_platform_contents_platform_source_id ON platform_contents (platform, source_id)"))

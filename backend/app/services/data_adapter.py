@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models.game import Game, GameStatus, GameGenre
+from app.models.game import Game, GameStatus, GameGenre, default_priority_weight
 from app.models.platform_content import PlatformContent, ContentPlatform, ContentType
 from app.models.platform_search_config import PlatformSearchConfig
 from app.models.crawl_progress import CrawlProgress
@@ -67,7 +67,7 @@ MONITOR_PLATFORM_ENDPOINTS: dict[str, str] = {
 
 MOCK_GAMES = [
     {"name": "三角洲行动", "genre": GameGenre.fps, "publisher": "腾讯", "status": GameStatus.operating,
-     "description": "腾讯天美工作室出品的战术射击手游"},
+     "description": "腾讯天美工作室出品的战术射击手游", "priority_weight": 3},
     {"name": "原神", "genre": GameGenre.open_world, "publisher": "米哈游", "status": GameStatus.operating,
      "description": "开放世界冒险RPG"},
     {"name": "鸣潮", "genre": GameGenre.open_world, "publisher": "库洛游戏", "status": GameStatus.operating,
@@ -75,7 +75,7 @@ MOCK_GAMES = [
     {"name": "火影忍者", "genre": GameGenre.rpg, "publisher": "腾讯", "status": GameStatus.operating,
      "description": "火影忍者正版授权格斗手游"},
     {"name": "洛克王国：世界", "genre": GameGenre.rpg, "publisher": "腾讯", "status": GameStatus.testing,
-     "description": "洛克王国IP开放世界新作"},
+     "description": "洛克王国IP开放世界新作", "priority_weight": 3},
     {"name": "崩坏：星穹铁道", "genre": GameGenre.rpg, "publisher": "米哈游", "status": GameStatus.operating,
      "description": "银河冒险RPG"},
     {"name": "永劫无间手游", "genre": GameGenre.battle_royale, "publisher": "网易", "status": GameStatus.operating,
@@ -391,6 +391,7 @@ class DataAdapter:
             game = Game(
                 id=str(uuid.uuid4()), name=g["name"], genre=g["genre"],
                 publisher=g["publisher"], status=g["status"], description=g["description"],
+                priority_weight=g.get("priority_weight", default_priority_weight(g["name"])),
             )
             self.session.add(game)
             games.append(game)
@@ -847,7 +848,7 @@ class DataAdapter:
             return count
 
         # 获取游戏信息
-        stmt = select(Game).where(Game.id.in_(game_ids))
+        stmt = select(Game).where(Game.id.in_(game_ids)).order_by(Game.priority_weight.desc(), Game.name)
         result = await self.session.execute(stmt)
         games = {g.id: g for g in result.scalars().all()}
 
@@ -919,7 +920,7 @@ class DataAdapter:
         if self.use_mock:
             return {"ok": False, "error": "Mock 模式下不支持重试"}
 
-        stmt = select(Game).where(Game.id.in_(game_ids))
+        stmt = select(Game).where(Game.id.in_(game_ids)).order_by(Game.priority_weight.desc(), Game.name)
         result = await self.session.execute(stmt)
         games = {g.id: g for g in result.scalars().all()}
 
@@ -987,7 +988,7 @@ class DataAdapter:
         self, game_ids: list[str], since: datetime | None = None,
     ) -> list[dict]:
         """兼容旧接口：一次性全部采集（不含断点续传）。"""
-        stmt = select(Game).where(Game.id.in_(game_ids))
+        stmt = select(Game).where(Game.id.in_(game_ids)).order_by(Game.priority_weight.desc(), Game.name)
         result = await self.session.execute(stmt)
         games = {g.id: g for g in result.scalars().all()}
 

@@ -203,16 +203,18 @@ class LLMPipeline:
 
         # 综合潜力分：加权平均
         weights = {
-            "重复提问密度": 0.25,
-            "信息分散度": 0.15,
-            "民间工具萌芽": 0.25,
-            "资格稀缺信号": 0.15,
-            "机制复杂度": 0.15,
-            "内容热度": 0.05,
-            "外部平台工具上线": 0.15,
+            "重复提问密度": 0.35,
+            "内容热度": 0.30,
+            "民间工具萌芽": 0.15,
+            "信息分散度": 0.10,
+            "资格稀缺信号": 0.10,
+            "机制复杂度": 0.10,
+            "外部平台工具上线": 0.10,
         }
         weighted = sum(scores.get(k, 0) * weights.get(k, 0) for k in weights)
-        potential = min(100.0, weighted * 1.2)
+        priority_weight = max(1, min(int(getattr(game, "priority_weight", 1) or 1), 5))
+        priority_multiplier = 1 + (priority_weight - 1) * 0.08
+        potential = min(100.0, weighted * 1.2 * priority_multiplier)
 
         return {
             "high_freq_questions": [f"{game.name}相关需求待 LLM 分析"],
@@ -231,7 +233,7 @@ class LLMPipeline:
         返回生成的需求列表。
         """
         # 获取游戏
-        stmt = select(Game).where(Game.id.in_(game_ids))
+        stmt = select(Game).where(Game.id.in_(game_ids)).order_by(Game.priority_weight.desc(), Game.name)
         result = await self.session.execute(stmt)
         games = result.scalars().all()
 
