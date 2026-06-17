@@ -11,6 +11,7 @@ const SIGNAL_NAMES: [string, string][] = [
   ["资格稀缺信号", "scarcity"],
   ["机制复杂度", "mechanism_complexity"],
   ["内容热度", "content_heat"],
+  ["外部平台工具上线", "external_platform_tool"],
 ]
 
 const LEVEL_CONFIG: Record<string, { bg: string; color: string; label: string }> = {
@@ -105,7 +106,7 @@ export default function DemandDetailPanel({ demand, onClose }: { demand: DemandC
             <>
               {/* Signal radar */}
               <div className="slideover-section">
-                <h4>六维信号</h4>
+                <h4>需求信号</h4>
                 <div style={{ display: "flex", gap: 28, alignItems: "flex-start" }}>
                   <RadarChart signals={d.signals} />
                   <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -117,9 +118,9 @@ export default function DemandDetailPanel({ demand, onClose }: { demand: DemandC
                           <div style={{ flex: 1, height: 7, borderRadius: 4, background: "#e5e7eb", overflow: "hidden" }}>
                             <div style={{
                               height: "100%", borderRadius: 4,
-                              background: key === "content_heat" ? "var(--cyan)" : key === "scarcity" ? "var(--amber)"
+                              background: key === "content_heat" ? "var(--cyan)" : key === "external_platform_tool" ? "var(--purple)" : key === "scarcity" ? "var(--amber)"
                                 : key === "grassroots_tool" ? "var(--green)" : key === "mechanism_complexity" ? "var(--red)"
-                                : key === "info_scatter" ? "var(--purple)" : "var(--primary)",
+                                : key === "info_scatter" ? "#8b5cf6" : "var(--primary)",
                               width: `${Math.min(val, 100)}%`,
                               transition: "width 0.5s ease"
                             }} />

@@ -26,7 +26,7 @@ class ReportGenerator:
         self.session = session
 
     async def generate_daily_report(self, report_date: date) -> DailyReport:
-        """生成指定日期的日报。"""
+        """生成指定日期的日报；同一天已存在日报时更新原记录。"""
         # 获取当日需求
         stmt = (
             select(Demand)
@@ -34,7 +34,7 @@ class ReportGenerator:
             .order_by(Demand.potential_score.desc())
         )
         result = await self.session.execute(stmt)
-        demands = result.scalars().all()
+        demands = self._dedupe_demands(result.scalars().all())
 
         # TOP 10 需求
         top_demands = demands[:10]
@@ -54,20 +54,50 @@ class ReportGenerator:
         else:
             summary = f"{report_date} 暂无满足阈值的新需求。"
 
-        # 创建日报
-        report = DailyReport(
-            id=str(uuid.uuid4()),
-            report_date=report_date,
-            summary=summary,
-            top_demand_ids=json.dumps(top_ids, ensure_ascii=False),
-            trending_game_ids=json.dumps([d.game_id for d in top_demands[:5]], ensure_ascii=False),
-            total_demands=len(demands),
-        )
-        self.session.add(report)
+        trending_game_ids = []
+        seen_game_ids = set()
+        for d in top_demands:
+            if d.game_id in seen_game_ids:
+                continue
+            seen_game_ids.add(d.game_id)
+            trending_game_ids.append(d.game_id)
+            if len(trending_game_ids) >= 5:
+                break
+
+        report_stmt = select(DailyReport).where(DailyReport.report_date == report_date)
+        report_result = await self.session.execute(report_stmt)
+        report = report_result.scalar()
+        if report is None:
+            report = DailyReport(id=str(uuid.uuid4()), report_date=report_date)
+            self.session.add(report)
+
+        report.summary = summary
+        report.top_demand_ids = json.dumps(top_ids, ensure_ascii=False)
+        report.trending_game_ids = json.dumps(trending_game_ids, ensure_ascii=False)
+        report.total_demands = len(demands)
+
         await self.session.commit()
         await self.session.refresh(report)
 
         return report
+
+    def _dedupe_demands(self, demands: list[Demand]) -> list[Demand]:
+        """按游戏、工具类型、标题去重，保留潜力分最高的一条。"""
+        unique: dict[tuple[str, str, str], Demand] = {}
+        for demand in demands:
+            key = (
+                demand.game_id,
+                demand.tool_type.value,
+                demand.title.strip(),
+            )
+            existing = unique.get(key)
+            if existing is None or demand.potential_score > existing.potential_score:
+                unique[key] = demand
+        return sorted(
+            unique.values(),
+            key=lambda d: d.potential_score,
+            reverse=True,
+        )
 
     async def get_report_by_date(self, report_date: date) -> DailyReport | None:
         """按日期获取日报。"""

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react"
-import { RefreshCw, Loader2, BarChart3, Gamepad2, TrendingUp, Zap, FileText, Plus, Brain, Target, Layers, RotateCw, ChevronDown, ChevronUp, CheckCircle, XCircle, Circle } from "lucide-react"
+import { RefreshCw, Loader2, BarChart3, Gamepad2, TrendingUp, Zap, FileText, Plus, Brain, Target, Layers, RotateCw, ChevronDown, ChevronUp, CheckCircle, XCircle, Circle, LogIn } from "lucide-react"
 import { api } from "../api/client"
 import type { DashboardSummary, DemandCard, Game, CrawlProgress, CrawlProgressRecord } from "../types"
 import DemandCardView from "../components/DemandCard"
@@ -12,6 +12,14 @@ const LEVEL_STYLE: Record<string, { bg: string; color: string }> = {
 }
 
 const PLATFORM_COLORS: Record<string, { label: string; color: string; bg: string }> = {
+  bilibili: { label: "B站", color: "#fb7299", bg: "rgba(251,114,153,0.1)" },
+  douyin: { label: "抖音", color: "#fe2c55", bg: "rgba(254,44,85,0.1)" },
+  taptap: { label: "TapTap", color: "#15bfff", bg: "rgba(21,191,255,0.1)" },
+  xiaoheihe: { label: "小黑盒", color: "#00c091", bg: "rgba(0,192,145,0.1)" },
+  heybox: { label: "小黑盒", color: "#00c091", bg: "rgba(0,192,145,0.1)" },
+  nga: { label: "NGA", color: "#f4a460", bg: "rgba(244,164,96,0.1)" },
+  weibo: { label: "微博", color: "#e6162d", bg: "rgba(230,22,45,0.1)" },
+  tieba: { label: "贴吧", color: "#3385ff", bg: "rgba(51,133,255,0.1)" },
   "B站": { label: "B站", color: "#fb7299", bg: "rgba(251,114,153,0.1)" },
   "抖音": { label: "抖音", color: "#fe2c55", bg: "rgba(254,44,85,0.1)" },
   "TapTap": { label: "TapTap", color: "#15bfff", bg: "rgba(21,191,255,0.1)" },
@@ -21,6 +29,35 @@ const PLATFORM_COLORS: Record<string, { label: string; color: string; bg: string
   "贴吧": { label: "贴吧", color: "#3385ff", bg: "rgba(51,133,255,0.1)" },
 }
 const DEFAULT_PLATFORM_COLOR = { label: "其他", color: "#888", bg: "rgba(136,136,136,0.1)" }
+
+const getPlatformColor = (platform: string) => {
+  const normalized = platform.trim().toLowerCase()
+  return PLATFORM_COLORS[platform] || PLATFORM_COLORS[normalized] || {
+    ...DEFAULT_PLATFORM_COLOR,
+    label: platform || DEFAULT_PLATFORM_COLOR.label,
+  }
+}
+
+const isDouyinProgressRecord = (record: CrawlProgressRecord) => {
+  const platform = record.platform.trim().toLowerCase()
+  return platform === "douyin" || record.platform === "抖音"
+}
+
+const getProgressDetailText = (record: CrawlProgressRecord) => {
+  const detail = record.result_detail
+  if (!detail) return ""
+  if (record.status !== "failed" && detail.shortfall_count <= 0 && detail.reasons.length === 0) return ""
+  return detail.summary
+}
+
+const getProgressDetailTitle = (record: CrawlProgressRecord) => {
+  const detail = record.result_detail
+  if (!detail) return ""
+  const reasons = detail.reasons
+    .filter((r) => r.count > 0 || r.detail)
+    .map((r) => `${r.label}${r.count > 0 ? `${r.count}条` : ""}${r.detail ? `：${r.detail}` : ""}`)
+  return [detail.summary, ...reasons].filter(Boolean).join("\n")
+}
 
 interface Props {
   onSelect: (d: DemandCard) => void
@@ -36,6 +73,8 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
   const [progress, setProgress] = useState<CrawlProgress | null>(null)
   const [progressLoading, setProgressLoading] = useState(false)
   const [progressExpanded, setProgressExpanded] = useState(true)
+  const [crawlNotice, setCrawlNotice] = useState<string | null>(null)
+  const [douyinLoginLoading, setDouyinLoginLoading] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const fetchData = async (showLoader = true) => {
@@ -87,14 +126,29 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
     pollRef.current = setInterval(poll, 2000)
   }
 
-  const triggerPipeline = async () => {
+  const triggerPipeline = async (forceRecrawl = false) => {
     setPipelineLoading(true)
+    setCrawlNotice(null)
     try {
-      await api.triggerPipeline()
+      const result = await api.triggerPipeline({ force_recrawl: forceRecrawl })
+      if (forceRecrawl) {
+        setCrawlNotice("已忽略今日完成状态并重新抓取，入库仍会自动去重。")
+      } else if (result.ingest?.status === "skipped_completed") {
+        setCrawlNotice(result.ingest.message || "今日所有平台关键词组合均已完成采集，本次无需重新抓取。")
+      }
       startPolling()
       await fetchData(false)
     } finally {
       setPipelineLoading(false)
+    }
+  }
+
+  const startDouyinLogin = async () => {
+    setDouyinLoginLoading(true)
+    try {
+      await api.startDouyinLogin()
+    } finally {
+      setDouyinLoginLoading(false)
     }
   }
 
@@ -136,12 +190,22 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
         <div className="metric-card action-card">
           <button
             className="btn btn-primary"
-            onClick={triggerPipeline}
+            onClick={() => triggerPipeline()}
             disabled={pipelineLoading}
             style={{ width: "100%", justifyContent: "center", padding: "12px 0", fontSize: 14 }}
           >
             {pipelineLoading ? <Loader2 className="spinner" size={16} /> : <RefreshCw size={16} />}
             {pipelineLoading ? "分析中..." : "立即分析"}
+          </button>
+          <button
+            className="btn btn-outline"
+            onClick={() => triggerPipeline(true)}
+            disabled={pipelineLoading}
+            title="忽略今日已完成状态，从头重新抓取；入库仍自动去重"
+            style={{ width: "100%", justifyContent: "center", padding: "10px 0", fontSize: 13, marginTop: 8 }}
+          >
+            {pipelineLoading ? <Loader2 className="spinner" size={15} /> : <RotateCw size={15} />}
+            强制重新抓取
           </button>
           <div className="metric-sub" style={{ textAlign: "center" }}>每日 06:00 自动执行</div>
         </div>
@@ -185,10 +249,31 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
             }} />
           </div>
 
+          {crawlNotice && (
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "9px 12px",
+              marginBottom: 12,
+              borderRadius: 6,
+              background: "rgba(16,185,129,0.08)",
+              border: "1px solid rgba(16,185,129,0.18)",
+              color: "var(--green)",
+              fontSize: 12,
+              lineHeight: 1.5,
+            }}>
+              <CheckCircle size={14} style={{ flexShrink: 0 }} />
+              <span>{crawlNotice}</span>
+            </div>
+          )}
+
           {progressExpanded && (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {progress.records.map((r) => {
-                const pc = PLATFORM_COLORS[r.platform] || DEFAULT_PLATFORM_COLOR
+                const pc = getPlatformColor(r.platform)
+                const detailText = getProgressDetailText(r)
+                const detailTitle = getProgressDetailTitle(r)
                 return (
                   <div key={r.id} style={{
                     display: "flex", alignItems: "center", gap: 10,
@@ -208,11 +293,65 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
                       minWidth: 48, justifyContent: "center",
                     }}>{pc.label}</span>
 
-                    <span style={{ flex: 1, color: "var(--text)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.keyword}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ color: "var(--text)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {r.keyword}
+                      </div>
+                      {r.status === "failed" && r.error_msg && (
+                        <div
+                          title={r.error_msg}
+                          style={{
+                            marginTop: 2,
+                            color: "var(--red)",
+                            fontSize: 11,
+                            lineHeight: 1.35,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {r.error_msg}
+                        </div>
+                      )}
+                      {detailText && (
+                        <div
+                          title={detailTitle}
+                          style={{
+                            marginTop: 2,
+                            color: r.status === "failed" ? "var(--red)" : "#b45309",
+                            fontSize: 11,
+                            lineHeight: 1.35,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {detailText}
+                        </div>
+                      )}
+                    </div>
 
                     <span style={{ color: "var(--text-muted)", fontSize: 11, minWidth: 70, textAlign: "right", whiteSpace: "nowrap" }}>
                       {r.items_ingested > 0 ? `${r.items_ingested} 条入库` : r.items_fetched > 0 ? `${r.items_fetched} 条抓取` : "-"}
                     </span>
+
+                    {r.status === "failed" && isDouyinProgressRecord(r) && (
+                      <button
+                        className="btn btn-xs btn-outline"
+                        style={{ color: "var(--primary)", borderColor: "var(--primary)", fontSize: 11, whiteSpace: "nowrap" }}
+                        disabled={douyinLoginLoading}
+                        title="打开本机抖音登录窗口"
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          try {
+                            await startDouyinLogin()
+                          } catch {}
+                        }}
+                      >
+                        {douyinLoginLoading ? <Loader2 className="spinner" size={11} style={{ marginRight: 3 }} /> : <LogIn size={11} style={{ marginRight: 3 }} />}
+                        登录
+                      </button>
+                    )}
 
                     {r.status === "failed" && (
                       <button
@@ -397,7 +536,7 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
               <div className="empty-icon"><RefreshCw size={24} /></div>
               <p style={{ fontWeight: 500, marginBottom: 6 }}>暂无需求数据</p>
               <p style={{ fontSize: 13, marginBottom: 20 }}>点击上方「立即分析」按钮，或等待每日凌晨 6:00 自动执行分析管线。</p>
-              <button className="btn btn-primary" onClick={triggerPipeline} disabled={pipelineLoading}>
+              <button className="btn btn-primary" onClick={() => triggerPipeline()} disabled={pipelineLoading}>
                 {pipelineLoading ? <Loader2 className="spinner" size={16} /> : <RefreshCw size={16} />}
                 运行首次分析
               </button>

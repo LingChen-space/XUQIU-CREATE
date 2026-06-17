@@ -1,4 +1,4 @@
-"""需求信号表 — 六维评分每维一条记录。"""
+"""需求信号表 — 需求评分每维一条记录。"""
 
 import uuid
 from datetime import datetime, date
@@ -16,6 +16,7 @@ class SignalType(str, enum.Enum):
     scarcity = "资格稀缺信号"
     mechanism_complexity = "机制复杂度"
     content_heat = "内容热度"
+    external_platform_tool = "外部平台工具上线"
 
 
 class DemandSignal(Base):

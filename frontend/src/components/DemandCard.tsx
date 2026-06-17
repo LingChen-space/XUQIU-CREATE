@@ -8,6 +8,7 @@ const SIGNAL_LABELS: Record<string, string> = {
   scarcity: "资格稀缺",
   mechanism_complexity: "机制复杂",
   content_heat: "内容热度",
+  external_platform_tool: "外部上线",
 }
 
 const BAR_COLORS = ["c1", "c2", "c3", "c4", "c5", "c6"]

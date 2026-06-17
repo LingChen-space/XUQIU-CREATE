@@ -22,11 +22,11 @@ logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 
 
-async def run_daily_pipeline():
+async def run_daily_pipeline(force_recrawl: bool = False):
     """
     每日主管线：
     1. 数据接入 - 从爬虫体系拉取过去24h的各平台内容
-    2. 信号计算 - 对每款活跃游戏计算六维需求信号
+    2. 信号计算 - 对每款活跃游戏计算需求信号
     3. LLM 分析 - 对候选游戏做痛点提炼
     4. 日报生成 - 汇总生成结构化日报
     """
@@ -46,9 +46,23 @@ async def run_daily_pipeline():
 
             if not game_ids:
                 logger.warning("[DailyPipeline] 无活跃游戏，跳过")
-                return
+                return {
+                    "ok": True,
+                    "status": "skipped",
+                    "message": "无活跃游戏，已跳过本次管线。",
+                    "ingest": {
+                        "status": "no_active_games",
+                        "message": "暂无活跃游戏，本次未执行采集。",
+                        "ingested_count": 0,
+                        "combos_total": 0,
+                        "force_recrawl": force_recrawl,
+                    },
+                    "signals_count": 0,
+                    "demands_count": 0,
+                    "report_id": None,
+                }
 
-            count = await adapter.ingest_contents(game_ids)
+            count = await adapter.ingest_contents(game_ids, force_recrawl=force_recrawl)
             logger.info(f"[DailyPipeline] 数据接入完成 - {count} 条内容")
 
             # --- Step 2: 信号计算 ---
@@ -65,10 +79,34 @@ async def run_daily_pipeline():
             report_gen = ReportGenerator(session)
             report = await report_gen.generate_daily_report(today)
             logger.info(f"[DailyPipeline] 日报生成完成 - {report.id}")
+            return {
+                "ok": True,
+                "status": "completed",
+                "message": "管线执行完成",
+                "ingest": adapter.last_ingest_result,
+                "signals_count": len(signals),
+                "demands_count": len(demands),
+                "report_id": report.id,
+            }
 
         except Exception as e:
             logger.exception(f"[DailyPipeline] 执行失败: {e}")
             await session.rollback()
+            return {
+                "ok": False,
+                "status": "failed",
+                "message": str(e),
+                "ingest": {
+                    "status": "failed",
+                    "message": "管线执行失败，未能确认采集状态。",
+                    "ingested_count": 0,
+                    "combos_total": 0,
+                    "force_recrawl": force_recrawl,
+                },
+                "signals_count": 0,
+                "demands_count": 0,
+                "report_id": None,
+            }
 
 
 def start_scheduler():

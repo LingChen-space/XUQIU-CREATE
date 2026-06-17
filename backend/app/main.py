@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from app.config import settings
 from app.database import init_db
@@ -98,9 +99,12 @@ async def health_check():
     return {"status": "ok", "app": settings.app_name}
 
 
+class PipelineRunRequest(BaseModel):
+    force_recrawl: bool = False
+
+
 @app.post("/api/pipeline/run")
-async def trigger_pipeline():
+async def trigger_pipeline(req: PipelineRunRequest | None = None):
     """手动触发一次完整分析管线。"""
     from app.services.scheduler import run_daily_pipeline
-    await run_daily_pipeline()
-    return {"ok": True, "message": "管线执行完成"}
+    return await run_daily_pipeline(force_recrawl=req.force_recrawl if req else False)

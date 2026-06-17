@@ -26,6 +26,16 @@ GRASSROOTS_TOOL_URL_PATTERNS = [
     r"https?://gitee\.com",
 ]
 
+TOOL_PRODUCT_KEYWORDS = [
+    "工具", "计算器", "模拟器", "地图", "助手", "查询", "工具箱",
+    "小程序", "网页版", "app", "h5",
+]
+
+TOOL_LAUNCH_KEYWORDS = [
+    "上线", "已上线", "正式上线", "发布", "开放使用", "可使用",
+    "入口", "官网", "下载", "链接", "地址", "获取教程",
+]
+
 
 def count_keyword_hits(text: str, keywords: list[str]) -> int:
     """统计文本中关键词命中次数。"""
@@ -93,3 +103,31 @@ def detect_grassroots_tools(texts: list[str], urls: list[str]) -> tuple[float, l
     evidence_count = len(set(evidence))
     strength = min(evidence_count / max(len(texts), 1) * 5, 1.0)
     return strength, evidence[:10]  # 最多返回10条证据
+
+
+def detect_external_platform_tools(texts: list[str], urls: list[str]) -> tuple[float, list[str]]:
+    """
+    检测外部平台同类工具是否已经上线。
+    返回 (信号强度 0-1, 匹配到的证据)。
+    """
+    evidence = []
+    if not texts and not urls:
+        return 0.0, evidence
+
+    text_count = max(len(texts), 1)
+    for text in texts:
+        lowered = text.lower()
+        has_tool = any(kw.lower() in lowered for kw in TOOL_PRODUCT_KEYWORDS)
+        has_launch = any(kw.lower() in lowered for kw in TOOL_LAUNCH_KEYWORDS)
+        if has_tool and has_launch:
+            hit = next((kw for kw in TOOL_LAUNCH_KEYWORDS if kw.lower() in lowered), "上线")
+            evidence.append(f"上线语义「{hit}」命中")
+
+    for url in urls:
+        if re.match(r"https?://", url or ""):
+            evidence.append(f"外部工具链接 {url[:60]}...")
+
+    text_strength = min(1.0, len([e for e in evidence if "上线语义" in e]) / text_count * 2)
+    url_strength = 0.3 if any("外部工具链接" in e for e in evidence) else 0.0
+    strength = min(1.0, text_strength * 0.7 + url_strength)
+    return strength, evidence[:10]

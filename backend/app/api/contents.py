@@ -52,6 +52,7 @@ async def list_contents(
             "game_id": c.game_id,
             "platform": c.platform.value,
             "content_type": c.content_type.value,
+            "source_id": c.source_id,
             "url": c.url,
             "title": c.title,
             "body": c.body[:200] if c.body else "",

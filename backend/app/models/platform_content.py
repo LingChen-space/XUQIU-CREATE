@@ -34,6 +34,7 @@ class PlatformContent(Base):
     game_id: Mapped[str] = mapped_column(String(36), ForeignKey("games.id", ondelete="CASCADE"), nullable=False, index=True, comment="关联游戏")
     platform: Mapped[ContentPlatform] = mapped_column(SAEnum(ContentPlatform), nullable=False, comment="来源平台")
     content_type: Mapped[ContentType] = mapped_column(SAEnum(ContentType), nullable=False, comment="内容类型")
+    source_id: Mapped[str] = mapped_column(String(128), default="", index=True, comment="平台原始内容ID")
     url: Mapped[str] = mapped_column(String(1024), default="", comment="原文URL")
     title: Mapped[str] = mapped_column(String(512), default="", comment="标题")
     body: Mapped[str] = mapped_column(Text, default="", comment="正文/简介")

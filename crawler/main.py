@@ -9,7 +9,6 @@ from urllib.parse import parse_qs, urlparse
 
 from app.heybox.api import api_search
 from app.taptap.api import api_agg_search, TapTapRiskControlError
-from checkpoint import CheckpointStore
 from douyin_data_clean import (
     INPUT_PATH as DOUYIN_INPUT_PATH,
     OUTPUT_PATH as DOUYIN_OUTPUT_PATH,
@@ -100,6 +99,19 @@ def ensure_target_count(platform: str, actual_count: int, target_count: int) -> 
         )
 
 
+def deduplicate(items: list[dict], key_func) -> list[dict]:
+    seen: set[str] = set()
+    result: list[dict] = []
+    for item in items:
+        key = key_func(item)
+        if key and key in seen:
+            continue
+        if key:
+            seen.add(key)
+        result.append(item)
+    return result
+
+
 
 def export_heybox(
     keyword: str,
@@ -107,21 +119,13 @@ def export_heybox(
     time_range: str,
     sort_filter: str,
 ) -> list[dict]:
-    store = CheckpointStore(
-        HEYBOX_OUTPUT_PATH,
-        dedup_key=lambda item: item.get("share_url", ""),
-    )
-
-    if len(store) >= target_count:
-        print(f"[Heybox] \u5df2\u6709 {len(store)} \u6761\u6570\u636e\uff0c\u5df2\u8fbe\u76ee\u6807 {target_count}\uff0c\u8df3\u8fc7\u91c7\u96c6\u3002")
-        return store.items[:target_count]
-
-    needed = target_count - len(store)
-    page_size = min(30, needed)
+    cleaned_items: list[dict] = []
+    seen: set[str] = set()
+    page_size = min(30, target_count)
     offset = 0
     merged_raw_items: list[dict] = []
 
-    while len(store) < target_count:
+    while len(cleaned_items) < target_count:
         print(
             f"[Heybox] Requesting api_search "
             f"keyword={keyword!r} limit={page_size} offset={offset} "
@@ -147,8 +151,18 @@ def export_heybox(
         merged_raw_items.extend(page_items)
 
         cleaned = extract_items({"result": {"items": page_items}})
-        added = store.add_batch(cleaned)
-        print(f"[Heybox] \u672c\u9875\u6e05\u6d17\u540e {len(cleaned)} \u6761\uff0c\u65b0\u589e {added} \u6761\uff0c\u7d2f\u8ba1 {len(store)} \u6761\u3002")
+        added = 0
+        for item in cleaned:
+            key = item.get("share_url", "")
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
+            cleaned_items.append(item)
+            added += 1
+            if len(cleaned_items) >= target_count:
+                break
+        print(f"[Heybox] 本页清洗后 {len(cleaned)} 条，新增 {added} 条，累计 {len(cleaned_items)} 条。")
 
         offset += len(page_items)
 
@@ -159,7 +173,8 @@ def export_heybox(
     if has_heybox_items(raw_payload):
         write_json(HEYBOX_INPUT_PATH, raw_payload)
 
-    result = store.items[:target_count]
+    result = cleaned_items[:target_count]
+    write_json(HEYBOX_OUTPUT_PATH, result)
     ensure_target_count("Heybox", len(result), target_count)
     print(f"Heybox exported {len(result)} items to {HEYBOX_OUTPUT_PATH}")
     return result
@@ -171,21 +186,14 @@ def export_taptap(
     sort: str | None,
     proxy_url: str | None,
 ) -> list[dict]:
-    store = CheckpointStore(
-        TAPTAP_OUTPUT_PATH,
-        dedup_key=lambda item: item.get("id_str", ""),
-    )
-
-    if len(store) >= target_count:
-        print(f"[TapTap] \u5df2\u6709 {len(store)} \u6761\u6570\u636e\uff0c\u5df2\u8fbe\u76ee\u6807 {target_count}\uff0c\u8df3\u8fc7\u91c7\u96c6\u3002")
-        return store.items[:target_count]
-
+    cleaned_items: list[dict] = []
+    seen: set[str] = set()
     page_size = min(20, target_count)
     from_ = 0
     session_id: str | None = None
     merged_raw_list: list[dict] = []
 
-    while len(store) < target_count:
+    while len(cleaned_items) < target_count:
         print(
             f"[TapTap] Requesting api_agg_search "
             f"keyword={keyword!r} limit={page_size} from_={from_} "
@@ -217,8 +225,18 @@ def export_taptap(
         merged_raw_list.extend(page_list)
 
         cleaned = extract_moments(response)
-        added = store.add_batch(cleaned)
-        print(f"[TapTap] \u672c\u9875\u6e05\u6d17\u540e {len(cleaned)} \u6761\uff0c\u65b0\u589e {added} \u6761\uff0c\u7d2f\u8ba1 {len(store)} \u6761\u3002")
+        added = 0
+        for item in cleaned:
+            key = item.get("id_str", "")
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
+            cleaned_items.append(item)
+            added += 1
+            if len(cleaned_items) >= target_count:
+                break
+        print(f"[TapTap] 本页清洗后 {len(cleaned)} 条，新增 {added} 条，累计 {len(cleaned_items)} 条。")
 
         next_page = get_taptap_next_page(page_list)
         if not next_page:
@@ -236,7 +254,8 @@ def export_taptap(
     if has_taptap_items(raw_payload):
         write_json(TAPTAP_INPUT_PATH, raw_payload)
 
-    result = store.items[:target_count]
+    result = cleaned_items[:target_count]
+    write_json(TAPTAP_OUTPUT_PATH, result)
     ensure_target_count("TapTap", len(result), target_count)
     print(f"TapTap exported {len(result)} items to {TAPTAP_OUTPUT_PATH}")
     return result
@@ -290,15 +309,6 @@ def export_douyin(keyword: str, target_count: int, sort: str, headless: bool) ->
         get_douyin_video_search_response,
     )
 
-    store = CheckpointStore(
-        DOUYIN_OUTPUT_PATH,
-        dedup_key=lambda item: item.get("video_url", ""),
-    )
-
-    if len(store) >= target_count:
-        print(f"[Douyin] \u5df2\u6709 {len(store)} \u6761\u6570\u636e\uff0c\u5df2\u8fbe\u76ee\u6807 {target_count}\uff0c\u8df3\u8fc7\u91c7\u96c6\u3002")
-        return store.items[:target_count]
-
     try:
         response_items, refreshed_cookies = asyncio.run(
             get_douyin_video_search_response(
@@ -325,15 +335,17 @@ def export_douyin(keyword: str, target_count: int, sort: str, headless: bool) ->
         save_douyin_cookies(refreshed_cookies)
 
     raw_payload = {"data": response_items[:target_count]}
-    cleaned_items = extract_videos(raw_payload)[:target_count]
-
-    added = store.add_batch(cleaned_items)
-    print(f"[Douyin] fetch \u8fd4\u56de {len(cleaned_items)} \u6761\uff0c\u5b9e\u9645\u65b0\u589e {added} \u6761\uff0c\u7d2f\u8ba1 {len(store)} \u6761\u3002")
+    cleaned_items = deduplicate(
+        extract_videos(raw_payload),
+        lambda item: item.get("video_url", ""),
+    )[:target_count]
+    print(f"[Douyin] fetch 返回 {len(cleaned_items)} 条。")
 
     if has_douyin_items(raw_payload):
         write_json(DOUYIN_INPUT_PATH, raw_payload)
 
-    result = store.items[:target_count]
+    result = cleaned_items[:target_count]
+    write_json(DOUYIN_OUTPUT_PATH, result)
     ensure_target_count("Douyin", len(result), target_count)
     print(f"Douyin exported {len(result)} items to {DOUYIN_OUTPUT_PATH}")
     return result

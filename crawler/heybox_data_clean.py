@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 
-INPUT_PATH = Path("docs/heybox_search_response.json")
+INPUT_PATH = Path("docs/raw_response/heybox_search_response.json")
 OUTPUT_PATH = Path("heybox_search_cleaned.json")
 
 
@@ -17,7 +17,10 @@ def extract_items(payload: dict) -> list[dict]:
         if not isinstance(info, dict):
             continue
 
+        linkid = info.get("linkid")
         cleaned_item = {
+            "source_id": str(linkid) if linkid is not None else None,
+            "linkid": info.get("linkid"),
             "title": info.get("title"),
             "description": info.get("description"),
             "thumbs": info.get("thumbs"),

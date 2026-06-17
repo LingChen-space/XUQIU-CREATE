@@ -1,6 +1,6 @@
 import type { HistoryLeaderboardOut } from '../types'
 import type { MonitorContentList, ContentStats } from '../types'
-import type { CrawlProgress } from '../types'
+import type { CrawlProgress, PipelineRunResult } from '../types'
 
 const BASE = '/api'
 
@@ -37,7 +37,8 @@ export const api = {
   createGame: (data: any) => request<any>('/games', { method: 'POST', body: JSON.stringify(data) }),
   updateGame: (id: string, data: any) => request<any>(`/games/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteGame: (id: string) => request<any>(`/games/${id}`, { method: 'DELETE' }),
-  triggerPipeline: () => request<any>('/pipeline/run', { method: 'POST' }),
+  triggerPipeline: (options: { force_recrawl?: boolean } = {}) =>
+    request<PipelineRunResult>('/pipeline/run', { method: 'POST', body: JSON.stringify(options) }),
   health: () => request<any>('/health'),
   // 搜索词配置
   getSearchConfigPlatforms: () => request<any[]>('/search-configs/platforms'),
@@ -62,4 +63,6 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ platform, keyword, crawl_count: crawlCount }),
     }),
+  startDouyinLogin: () => request<any>('/monitor/douyin/login', { method: 'POST' }),
+  getDouyinLoginStatus: () => request<any>('/monitor/douyin/login'),
 }

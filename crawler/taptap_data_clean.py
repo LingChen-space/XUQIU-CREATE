@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 
-INPUT_PATH = Path("docs/taptap_search_response.json")
+INPUT_PATH = Path("docs/raw_response/taptap_search_response.json")
 OUTPUT_PATH = Path("taptap_search_cleaned.json")
 
 
@@ -36,6 +36,7 @@ def extract_moments(payload: dict) -> list[dict]:
         footer_images = moment.get("topic", {}).get("footer_images") or []
         cleaned_items.append(
             {
+                "source_id": moment.get("id_str"),
                 "title": moment.get("title"),
                 "summary": moment.get("summary"),
                 "thumbs": [

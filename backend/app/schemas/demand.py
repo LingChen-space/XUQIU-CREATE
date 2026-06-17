@@ -6,13 +6,14 @@ from typing import Optional
 
 
 class SignalSnapshot(BaseModel):
-    """六维信号得分快照。"""
+    """信号得分快照。"""
     repeat_question: float = 0.0
     info_scatter: float = 0.0
     grassroots_tool: float = 0.0
     scarcity: float = 0.0
     mechanism_complexity: float = 0.0
     content_heat: float = 0.0
+    external_platform_tool: float = 0.0
 
 
 class LLMAnalysisOut(BaseModel):

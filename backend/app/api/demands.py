@@ -58,6 +58,7 @@ async def _build_demand_card(demand: Demand, db: AsyncSession) -> DemandCard:
             scarcity=signals_dict.get("资格稀缺信号", 0),
             mechanism_complexity=signals_dict.get("机制复杂度", 0),
             content_heat=signals_dict.get("内容热度", 0),
+            external_platform_tool=signals_dict.get("外部平台工具上线", 0),
         ),
         llm_reasoning=llm_reasoning,
         demand_date=demand.demand_date,
@@ -281,6 +282,7 @@ async def get_demand_detail(demand_id: str, db: AsyncSession = Depends(get_db)):
             scarcity=signals_dict.get("资格稀缺信号", 0),
             mechanism_complexity=signals_dict.get("机制复杂度", 0),
             content_heat=signals_dict.get("内容热度", 0),
+            external_platform_tool=signals_dict.get("外部平台工具上线", 0),
         ),
         llm_analysis=LLMAnalysisOut(
             high_freq_questions=llm_dict.get("high_freq_questions", []),

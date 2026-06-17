@@ -1,9 +1,10 @@
 import type { SignalSnapshot } from "../types"
 
-const LABELS = ["重复提问", "信息分散", "民间工具", "资格稀缺", "机制复杂", "内容热度"]
+const LABELS = ["重复提问", "信息分散", "民间工具", "资格稀缺", "机制复杂", "内容热度", "外部上线"]
 const KEYS: (keyof SignalSnapshot)[] = [
   "repeat_question", "info_scatter", "grassroots_tool",
   "scarcity", "mechanism_complexity", "content_heat",
+  "external_platform_tool",
 ]
 
 const SIZE = 200

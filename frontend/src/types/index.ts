@@ -5,6 +5,7 @@ export interface SignalSnapshot {
   scarcity: number
   mechanism_complexity: number
   content_heat: number
+  external_platform_tool: number
 }
 
 export interface LLMAnalysis {
@@ -136,6 +137,7 @@ export interface MonitorContent {
   game_id: string
   platform: string
   content_type: string
+  source_id: string
   url: string
   title: string
   body: string
@@ -163,6 +165,22 @@ export interface ContentStats {
   by_date: { date: string; count: number }[]
 }
 
+export interface CrawlProgressReason {
+  type: "platform_shortfall" | "duplicate" | "filtered_unrelated" | "partial_failed" | "failed" | "other"
+  label: string
+  count: number
+  detail: string
+}
+
+export interface CrawlProgressDetail {
+  target_count: number
+  fetched_count: number
+  ingested_count: number
+  shortfall_count: number
+  reasons: CrawlProgressReason[]
+  summary: string
+}
+
 export interface CrawlProgressRecord {
   id: string
   platform: string
@@ -172,6 +190,7 @@ export interface CrawlProgressRecord {
   items_fetched: number
   items_ingested: number
   error_msg: string | null
+  result_detail: CrawlProgressDetail | null
   started_at: string | null
   completed_at: string | null
 }
@@ -183,4 +202,22 @@ export interface CrawlProgress {
   running: number
   pending: number
   records: CrawlProgressRecord[]
+}
+
+export interface PipelineIngestResult {
+  status: "idle" | "mock" | "mock_no_configs" | "no_games" | "no_active_games" | "skipped_completed" | "crawled" | "failed"
+  message: string
+  ingested_count: number
+  combos_total: number
+  force_recrawl?: boolean
+}
+
+export interface PipelineRunResult {
+  ok: boolean
+  status: "completed" | "skipped" | "failed"
+  message: string
+  ingest: PipelineIngestResult
+  signals_count: number
+  demands_count: number
+  report_id: string | null
 }

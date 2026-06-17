@@ -36,6 +36,9 @@ class CrawlProgress(Base):
     error_msg: Mapped[str | None] = mapped_column(
         Text, nullable=True, default=None, comment="失败时的错误信息"
     )
+    result_detail: Mapped[str | None] = mapped_column(
+        Text, nullable=True, default=None, comment="采集结果明细JSON，包含少入库原因"
+    )
     started_at: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True, default=None, comment="开始时间"
     )

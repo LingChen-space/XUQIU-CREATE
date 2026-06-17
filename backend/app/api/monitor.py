@@ -151,3 +151,34 @@ async def trigger_douyin(keyword: str = Query(default="工具"), count: int = Qu
         raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"监控服务不可用: {e}")
+
+
+@router.get("/douyin/login")
+async def douyin_login_status():
+    """查询抖音登录窗口状态。"""
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"{settings.monitor_api_base}/douyin/login")
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"监控服务不可用: {e}")
+
+
+@router.post("/douyin/login")
+async def start_douyin_login(timeout_seconds: int = Query(default=300)):
+    """触发本机抖音登录窗口。"""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{settings.monitor_api_base}/douyin/login",
+                params={"timeout_seconds": timeout_seconds},
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"监控服务不可用: {e}")

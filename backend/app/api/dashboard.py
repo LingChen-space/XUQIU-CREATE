@@ -21,8 +21,8 @@ from app.schemas.demand import compute_demand_level
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
-SIGNAL_LABELS = ["重复提问密度", "信息分散度", "民间工具萌芽", "资格稀缺信号", "机制复杂度", "内容热度"]
-SIGNAL_KEYS = ["repeat_question", "info_scatter", "grassroots_tool", "scarcity", "mechanism_complexity", "content_heat"]
+SIGNAL_LABELS = ["重复提问密度", "信息分散度", "民间工具萌芽", "资格稀缺信号", "机制复杂度", "内容热度", "外部平台工具上线"]
+SIGNAL_KEYS = ["repeat_question", "info_scatter", "grassroots_tool", "scarcity", "mechanism_complexity", "content_heat", "external_platform_tool"]
 
 
 @router.get("/summary", response_model=DashboardSummary)

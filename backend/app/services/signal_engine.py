@@ -1,10 +1,9 @@
-"""六维信号评分引擎。
+"""需求信号评分引擎。
 
-对每款游戏计算六个维度的需求信号分 (0-100)，为 LLM 分析提供数据基础。
+对每款游戏计算多个维度的需求信号分 (0-100)，为 LLM 分析提供数据基础。
 """
 
 import json
-import math
 from datetime import datetime, timedelta, date
 from collections import defaultdict
 
@@ -16,17 +15,22 @@ from app.models.game import Game
 from app.models.platform_content import PlatformContent, ContentType
 from app.models.demand_signal import DemandSignal, SignalType
 from app.utils.text_similarity import detect_repeat_questions
-from app.utils.keyword_matcher import detect_scarcity_signal, detect_grassroots_tools
+from app.utils.engagement import compute_content_hot_score
+from app.utils.keyword_matcher import (
+    detect_external_platform_tools,
+    detect_grassroots_tools,
+    detect_scarcity_signal,
+)
 
 
 class SignalEngine:
-    """六维信号计算引擎。"""
+    """需求信号计算引擎。"""
 
     def __init__(self, session: AsyncSession):
         self.session = session
 
     async def compute_all_signals(self, game_ids: list[str], window_date: date) -> list[DemandSignal]:
-        """对一批游戏计算全部六维信号，写入 demand_signals 表。"""
+        """对一批游戏计算全部信号，写入 demand_signals 表。"""
         all_signals = []
 
         for gid in game_ids:
@@ -62,6 +66,8 @@ class SignalEngine:
             complexity_score = await self._compute_complexity(contents, all_texts)
             # 6. 内容热度 (0-100)
             heat_score = self._compute_content_heat(contents)
+            # 7. 外部平台工具上线 (0-100)
+            external_platform_score = self._compute_external_platform_tool(contents, all_texts, all_urls)
 
             scores = {
                 SignalType.repeat_question: repeat_score,
@@ -70,6 +76,7 @@ class SignalEngine:
                 SignalType.scarcity: scarcity_score,
                 SignalType.mechanism_complexity: complexity_score,
                 SignalType.content_heat: heat_score,
+                SignalType.external_platform_tool: external_platform_score,
             }
 
             for signal_type, score in scores.items():
@@ -130,6 +137,17 @@ class SignalEngine:
         score = min(100.0, strength * 100)
         return round(score, 1)
 
+    def _compute_external_platform_tool(
+        self,
+        contents: list[PlatformContent],
+        all_texts: list[str],
+        all_urls: list[str],
+    ) -> float:
+        """外部平台工具上线：检测已有同类工具入口、链接或上线信息。"""
+        strength, evidence = detect_external_platform_tools(all_texts, all_urls)
+        score = min(100.0, strength * 100)
+        return round(score, 1)
+
     def _compute_scarcity(self, contents: list[PlatformContent], all_texts: list[str]) -> float:
         """资格稀缺信号：检测限量/抢码/体验服关键词。"""
         strength, keywords = detect_scarcity_signal(all_texts)
@@ -163,7 +181,7 @@ class SignalEngine:
         return round(score, 1)
 
     def _compute_content_heat(self, contents: list[PlatformContent]) -> float:
-        """内容热度：综合浏览量/点赞/评论/转发。"""
+        """内容热度：综合总量热度，并加入单篇高互动帖子加成。"""
         if not contents:
             return 0.0
 
@@ -172,17 +190,18 @@ class SignalEngine:
         total_comments = sum(c.comment_count for c in contents)
         total_shares = sum(c.share_count for c in contents)
 
-        # 加权综合热度
-        raw_heat = (total_views * 0.001) + (total_likes * 0.1) + (total_comments * 0.5) + (total_shares * 1.0)
-
-        # 对数归一化到 0-100
-        if raw_heat <= 0:
-            return 0.0
-        score = min(100.0, math.log10(raw_heat + 1) * 20)
+        aggregate_score = compute_content_hot_score(total_views, total_likes, total_comments, total_shares)
+        single_scores = [
+            compute_content_hot_score(c.view_count, c.like_count, c.comment_count, c.share_count)
+            for c in contents
+            if c.content_type in (ContentType.post, ContentType.video, ContentType.search_term)
+        ]
+        single_post_score = max(single_scores) if single_scores else 0.0
+        score = min(100.0, aggregate_score * 0.75 + single_post_score * 0.35)
         return round(score, 1)
 
     async def get_signals_for_game(self, game_id: str, window_date: date) -> dict:
-        """获取某游戏在指定日期的六维信号。"""
+        """获取某游戏在指定日期的需求信号。"""
         stmt = select(DemandSignal).where(
             and_(DemandSignal.game_id == game_id, DemandSignal.window_date == window_date)
         )

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 
-INPUT_PATH = Path("docs/douyin_search_response.json")
+INPUT_PATH = Path("docs/raw_response/douyin_search_response.json")
 OUTPUT_PATH = Path("douyin_search_cleaned.json")
 
 
@@ -20,6 +20,8 @@ def extract_videos(payload: dict | list) -> list[dict]:
             continue
 
         cleaned_item = {
+            "source_id": item.get("video_id"),
+            "video_id": item.get("video_id"),
             "video_url": item.get("video_url"),
             "video_desc": item.get("video_desc"),
             "create_time": item.get("create_time"),

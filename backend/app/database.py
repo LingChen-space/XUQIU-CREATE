@@ -27,6 +27,16 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
         # 迁移: 为已存在的 platform_search_configs 表添加 crawl_count 列
         try:
-            await conn.run_sync(lambda c: c.execute("ALTER TABLE platform_search_configs ADD COLUMN crawl_count INTEGER NOT NULL DEFAULT 50"))
+            await conn.run_sync(lambda c: c.exec_driver_sql("ALTER TABLE platform_search_configs ADD COLUMN crawl_count INTEGER NOT NULL DEFAULT 50"))
         except Exception:
             pass  # 列已存在则忽略
+        try:
+            await conn.run_sync(lambda c: c.exec_driver_sql("ALTER TABLE platform_contents ADD COLUMN source_id VARCHAR(128) NOT NULL DEFAULT ''"))
+        except Exception:
+            pass
+        try:
+            await conn.run_sync(lambda c: c.exec_driver_sql("ALTER TABLE crawl_progress ADD COLUMN result_detail TEXT"))
+        except Exception:
+            pass
+        await conn.run_sync(lambda c: c.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_platform_contents_source_id ON platform_contents (source_id)"))
+        await conn.run_sync(lambda c: c.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_platform_contents_platform_source_id ON platform_contents (platform, source_id)"))

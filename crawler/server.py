@@ -23,6 +23,8 @@ import asyncio
 import json
 import logging
 import sys
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -36,10 +38,9 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from app.heybox.api import api_search
 from app.taptap.api import api_agg_search, TapTapRiskControlError
-from checkpoint import CheckpointStore
-from heybox_data_clean import extract_items, OUTPUT_PATH as HEYBOX_OUTPUT_PATH
-from taptap_data_clean import extract_moments, OUTPUT_PATH as TAPTAP_OUTPUT_PATH
-from douyin_data_clean import extract_videos, OUTPUT_PATH as DOUYIN_OUTPUT_PATH
+from heybox_data_clean import extract_items
+from taptap_data_clean import extract_moments
+from douyin_data_clean import extract_videos
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("monitor-server")
@@ -50,6 +51,24 @@ TAPTAP_SORT_VALUES = ("default", "update_time,desc", "commented_time,desc")
 DOUYIN_SORT_VALUES = ("default", "latest", "most_like")
 
 DOUYIN_COOKIE_PATH = SCRIPT_DIR / ".cloakbrowser" / "douyin-cookies.json"
+DOUYIN_LOGIN_COOKIE_NAMES = {
+    "sessionid",
+    "sessionid_ss",
+    "sid_guard",
+    "sid_tt",
+    "uid_tt",
+    "uid_tt_ss",
+    "passport_auth_status",
+    "passport_auth_status_ss",
+}
+
+_douyin_login_lock = threading.Lock()
+_douyin_login_state: dict[str, Any] = {
+    "status": "idle",
+    "running": False,
+    "ready": DOUYIN_COOKIE_PATH.exists(),
+    "message": "",
+}
 
 app = FastAPI(title="监控采集服务", version="2.1.0")
 
@@ -66,7 +85,12 @@ def _deduplicate(items: list[dict], key_fields: list[str]) -> list[dict]:
     seen: set[str] = set()
     result: list[dict] = []
     for item in items:
-        key = "|".join(str(item.get(f, "")) for f in key_fields)
+        key = ""
+        for field in key_fields:
+            value = item.get(field)
+            if value:
+                key = str(value)
+                break
         if key and key not in seen:
             seen.add(key)
             result.append(item)
@@ -94,6 +118,91 @@ def _load_douyin_cookies() -> list[dict] | None:
 def _save_douyin_cookies(cookies: list[dict]) -> None:
     _write_json(DOUYIN_COOKIE_PATH, cookies)
     logger.info("[Douyin] Saved session cookies")
+
+
+def _is_douyin_logged_in(cookies: list[dict] | None) -> bool:
+    if not cookies:
+        return False
+    for cookie in cookies:
+        name = str(cookie.get("name", ""))
+        value = str(cookie.get("value", ""))
+        if name in DOUYIN_LOGIN_COOKIE_NAMES and value:
+            return True
+    return False
+
+
+def _set_douyin_login_state(**updates: Any) -> dict[str, Any]:
+    with _douyin_login_lock:
+        _douyin_login_state.update(updates)
+        _douyin_login_state["ready"] = DOUYIN_COOKIE_PATH.exists()
+        return dict(_douyin_login_state)
+
+
+def _get_douyin_login_state() -> dict[str, Any]:
+    with _douyin_login_lock:
+        _douyin_login_state["ready"] = DOUYIN_COOKIE_PATH.exists()
+        return dict(_douyin_login_state)
+
+
+def _run_douyin_login_session(timeout_seconds: int) -> None:
+    from app.douyin.browser_core import (
+        DOUYIN_SCREEN,
+        DOUYIN_WWW_URL,
+        start_douyin_browser_session,
+    )
+
+    _set_douyin_login_state(
+        status="running",
+        running=True,
+        message="抖音登录窗口已打开，请在本机浏览器中完成登录。",
+    )
+    try:
+        try:
+            initial_cookies = _load_douyin_cookies()
+        except Exception as exc:
+            logger.warning("[Douyin login] Ignore invalid existing cookies: %s", exc)
+            initial_cookies = None
+
+        with start_douyin_browser_session(
+            DOUYIN_WWW_URL,
+            initial_cookies=initial_cookies,
+            headless=False,
+            context_kwargs={
+                "screen": DOUYIN_SCREEN,
+                "viewport": DOUYIN_SCREEN,
+            },
+        ) as session:
+            deadline = time.monotonic() + timeout_seconds
+            while time.monotonic() < deadline:
+                cookies = session.get_cookies()
+                if _is_douyin_logged_in(cookies):
+                    _save_douyin_cookies(cookies)
+                    _set_douyin_login_state(
+                        status="success",
+                        running=False,
+                        message="抖音登录成功，Cookie 已保存。",
+                    )
+                    return
+
+                try:
+                    if session.page.is_closed():
+                        break
+                except Exception:
+                    break
+                time.sleep(2)
+
+            _set_douyin_login_state(
+                status="timeout",
+                running=False,
+                message="未检测到抖音登录态，请重新点击登录并完成扫码/手机号登录。",
+            )
+    except Exception as exc:
+        logger.exception("[Douyin login] Failed")
+        _set_douyin_login_state(
+            status="failed",
+            running=False,
+            message=f"抖音登录窗口启动失败: {exc}",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -162,20 +271,12 @@ class CrawlResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 def _fetch_heybox(keyword: str, count: int, time_range: str, sort: str) -> list[dict]:
-    store = CheckpointStore(
-        HEYBOX_OUTPUT_PATH,
-        dedup_key=lambda item: item.get("share_url", ""),
-    )
-
-    if len(store) >= count:
-        logger.info(f"[Heybox] \u5df2\u6709 {len(store)} \u6761\uff0c\u5df2\u8fbe\u76ee\u6807 {count}\uff0c\u8df3\u8fc7\u91c7\u96c6")
-        return store.items[:count]
-
-    needed = count - len(store)
-    page_size = min(30, needed)
+    items: list[dict] = []
+    seen: set[str] = set()
+    page_size = min(30, count)
     offset = 0
 
-    while len(store) < count:
+    while len(items) < count:
         logger.info(f"[Heybox] keyword={keyword!r} limit={page_size} offset={offset} range={time_range!r} sort={sort!r}")
         resp = api_search(keyword=keyword, limit=page_size, offset=offset, time_range=time_range, sort_filter=sort)
         if not resp:
@@ -185,14 +286,24 @@ def _fetch_heybox(keyword: str, count: int, time_range: str, sort: str) -> list[
             break
 
         cleaned = extract_items({"result": {"items": page_items}})
-        added = store.add_batch(cleaned)
-        logger.info(f"[Heybox] \u672c\u9875\u6e05\u6d17\u540e {len(cleaned)} \u6761\uff0c\u65b0\u589e {added} \u6761\uff0c\u7d2f\u8ba1 {len(store)} \u6761")
+        added = 0
+        for item in cleaned:
+            key = item.get("source_id") or item.get("linkid") or item.get("share_url", "")
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
+            items.append(item)
+            added += 1
+            if len(items) >= count:
+                break
+        logger.info(f"[Heybox] 本页清洗后 {len(cleaned)} 条，新增 {added} 条，累计 {len(items)} 条")
 
         offset += len(page_items)
         if len(page_items) < page_size:
             break
 
-    return store.items[:count]
+    return items[:count]
 
 
 # ---------------------------------------------------------------------------
@@ -232,20 +343,13 @@ def _get_taptap_from_value(next_page: str) -> int | None:
 
 
 def _fetch_taptap(keyword: str, count: int, sort: str | None, proxy_url: str | None) -> list[dict]:
-    store = CheckpointStore(
-        TAPTAP_OUTPUT_PATH,
-        dedup_key=lambda item: item.get("id_str", ""),
-    )
-
-    if len(store) >= count:
-        logger.info(f"[TapTap] \u5df2\u6709 {len(store)} \u6761\uff0c\u5df2\u8fbe\u76ee\u6807 {count}\uff0c\u8df3\u8fc7\u91c7\u96c6")
-        return store.items[:count]
-
+    items: list[dict] = []
+    seen: set[str] = set()
     page_size = min(20, count)
     from_ = 0
     session_id: str | None = None
 
-    while len(store) < count:
+    while len(items) < count:
         logger.info(f"[TapTap] keyword={keyword!r} limit={page_size} from_={from_} session_id={session_id} sort={sort} proxy={proxy_url}")
         resp = api_agg_search(keyword=keyword, sort=sort, limit=page_size, from_=from_, session_id=session_id, proxy_url=proxy_url)
         if not resp:
@@ -257,8 +361,18 @@ def _fetch_taptap(keyword: str, count: int, sort: str | None, proxy_url: str | N
             session_id = _get_taptap_session_id(page_list)
 
         cleaned = extract_moments(resp)
-        added = store.add_batch(cleaned)
-        logger.info(f"[TapTap] \u672c\u9875\u6e05\u6d17\u540e {len(cleaned)} \u6761\uff0c\u65b0\u589e {added} \u6761\uff0c\u7d2f\u8ba1 {len(store)} \u6761")
+        added = 0
+        for item in cleaned:
+            key = item.get("id_str", "")
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
+            items.append(item)
+            added += 1
+            if len(items) >= count:
+                break
+        logger.info(f"[TapTap] 本页清洗后 {len(cleaned)} 条，新增 {added} 条，累计 {len(items)} 条")
 
         next_page = _get_taptap_next_page(page_list)
         if not next_page:
@@ -266,7 +380,7 @@ def _fetch_taptap(keyword: str, count: int, sort: str | None, proxy_url: str | N
         next_from = _get_taptap_from_value(next_page)
         from_ = next_from if next_from is not None else from_ + page_size
 
-    return store.items[:count]
+    return items[:count]
 
 
 # ---------------------------------------------------------------------------
@@ -280,15 +394,6 @@ async def _fetch_douyin(keyword: str, count: int, sort: str, headless: bool) -> 
         get_douyin_video_search_response,
     )
 
-    store = CheckpointStore(
-        DOUYIN_OUTPUT_PATH,
-        dedup_key=lambda item: item.get("video_url", ""),
-    )
-
-    if len(store) >= count:
-        logger.info(f"[Douyin] 已有 {len(store)} 条，已达到目标 {count}，跳过采集")
-        return store.items[:count]
-
     try:
         logger.info(f"[Douyin] keyword={keyword!r} count={count} sort={sort!r} headless={headless!r}")
         response_items, refreshed_cookies = await get_douyin_video_search_response(
@@ -299,22 +404,21 @@ async def _fetch_douyin(keyword: str, count: int, sort: str, headless: bool) -> 
             headless=headless,
         )
     except DouyinAntiSpamException as exc:
-        raise RuntimeError(f"抖音风控/验证: {exc} 请先在 CLI 执行 python main.py douyin --douyin-login")
+        raise RuntimeError(f"抖音风控/验证: {exc} 请点击进度区域的“登录”按钮重新登录后再试。")
     except Exception as exc:
         msg = str(exc)
         if "验证码" in msg or "验证" in msg or "风控" in msg:
-            raise RuntimeError(f"抖音验证: {msg} 请先在 CLI 执行 python main.py douyin --douyin-login")
+            raise RuntimeError(f"抖音验证: {msg} 请点击进度区域的“登录”按钮重新登录后再试。")
         raise
 
     if refreshed_cookies:
         _save_douyin_cookies(refreshed_cookies)
 
     raw_payload = {"data": response_items[:count]}
-    cleaned = extract_videos(raw_payload)[:count]
+    cleaned = _deduplicate(extract_videos(raw_payload), ["source_id", "video_id", "video_url"])[:count]
 
-    added = store.add_batch(cleaned)
-    logger.info(f"[Douyin] fetch 返回 {len(cleaned)} 条，实际新增 {added} 条，累计 {len(store)} 条")
-    return store.items[:count]
+    logger.info(f"[Douyin] fetch 返回 {len(cleaned)} 条")
+    return cleaned
 
 
 # ---------------------------------------------------------------------------
@@ -331,6 +435,7 @@ async def health():
             "taptap": True,
             "douyin": douyin_ready,
         },
+        "douyin_login": _get_douyin_login_state(),
     }
 
 
@@ -357,11 +462,36 @@ async def crawl_taptap(req: TapTapCrawlRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/monitor/douyin/login")
+async def douyin_login_status():
+    return _get_douyin_login_state()
+
+
+@app.post("/api/monitor/douyin/login")
+async def start_douyin_login(timeout_seconds: int = Query(default=300, ge=30, le=1800)):
+    state = _get_douyin_login_state()
+    if state.get("running"):
+        return {"ok": True, **state}
+
+    _set_douyin_login_state(
+        status="starting",
+        running=True,
+        message="正在启动抖音登录窗口...",
+    )
+    thread = threading.Thread(
+        target=_run_douyin_login_session,
+        args=(timeout_seconds,),
+        daemon=True,
+    )
+    thread.start()
+    return {"ok": True, **_get_douyin_login_state()}
+
+
 @app.post("/api/monitor/douyin", response_model=CrawlResponse)
 async def crawl_douyin(req: DouyinCrawlRequest):
     douyin_ready = DOUYIN_COOKIE_PATH.exists()
     if not douyin_ready:
-        raise HTTPException(status_code=400, detail="抖音未登录，请先在 CLI 执行 python main.py douyin --douyin-login")
+        raise HTTPException(status_code=400, detail="抖音未登录，请先点击进度区域的“登录”按钮完成登录。")
     try:
         items = await _fetch_douyin(req.keyword, req.count, req.sort, req.headless)
         return CrawlResponse(ok=True, platform="douyin", keyword=req.keyword, count=len(items), items=items)
@@ -391,7 +521,7 @@ async def crawl_all_platforms(keyword: str = Query(default="工具"), count: int
     try:
         items_award = _fetch_heybox(keyword, count, "30d", "award_num")
         items_default = _fetch_heybox(keyword, count, "30d", "default")
-        combined = _deduplicate(items_award + items_default, ["title", "share_url"])
+        combined = _deduplicate(items_award + items_default, ["source_id", "linkid", "share_url"])
         results.append({"platform": "heybox", "ok": True, "count": len(combined), "items": combined, "sorts": ["award_num", "default"]})
     except Exception as e:
         results.append({"platform": "heybox", "ok": False, "error": str(e)})
@@ -400,7 +530,7 @@ async def crawl_all_platforms(keyword: str = Query(default="工具"), count: int
     try:
         items_default = _fetch_taptap(keyword, count, None, None)
         items_latest = _fetch_taptap(keyword, count, "update_time,desc", None)
-        combined = _deduplicate(items_default + items_latest, ["title", "id_str"])
+        combined = _deduplicate(items_default + items_latest, ["source_id", "id_str"])
         results.append({"platform": "taptap", "ok": True, "count": len(combined), "items": combined, "sorts": ["default", "update_time,desc"]})
     except TapTapRiskControlError as e:
         results.append({"platform": "taptap", "ok": False, "error": str(e)})
@@ -422,7 +552,7 @@ async def crawl_all_platforms(keyword: str = Query(default="工具"), count: int
                     logger.warning(f"[Douyin crawl-all] sort={sort_name} failed: {exc}")
                 await asyncio.sleep(5)
             if douyin_items:
-                combined = _deduplicate(douyin_items, ["video_url", "video_desc"])
+                combined = _deduplicate(douyin_items, ["source_id", "video_id", "video_url"])
                 results.append({"platform": "douyin", "ok": True, "count": len(combined), "items": combined, "sorts": douyin_sorts})
             else:
                 results.append({"platform": "douyin", "ok": False, "error": "所有排序方式均采集失败"})
