@@ -14,6 +14,13 @@ const SIGNAL_NAMES: [string, string][] = [
   ["外部平台工具上线", "external_platform_tool"],
 ]
 
+const getDemandDisplayTitle = (demand: DemandCard | DemandDetail) => {
+  if (demand.demand_category === "experience_server" && demand.experience_focus?.length > 0) {
+    return `${demand.game_name} · ${demand.experience_focus.join(" / ")}`
+  }
+  return demand.title
+}
+
 const LEVEL_CONFIG: Record<string, { bg: string; color: string; label: string }> = {
   "S级": { bg: "#fef2f2", color: "#b91c1c", label: "S级" },
   "A级": { bg: "#fffbeb", color: "#92400e", label: "A级" },
@@ -56,10 +63,16 @@ export default function DemandDetailPanel({ demand, onClose }: { demand: DemandC
       <div className="slideover-panel">
         <div className="slideover-header">
           <div style={{ flex: 1, minWidth: 0, paddingRight: 16 }}>
-            <h3>{demand.title}</h3>
+            <h3>{getDemandDisplayTitle(d || demand)}</h3>
             <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
               <span className="chip game">{demand.game_name}</span>
-              <span className="chip">{demand.tool_type}</span>
+              {demand.demand_category === "experience_server" ? (
+                (demand.experience_focus?.length ? demand.experience_focus : ["体验服内容"]).map((label) => (
+                  <span key={label} className="chip" style={{ background: "#f0fdf4", color: "#047857" }}>{label}</span>
+                ))
+              ) : (
+                <span className="chip">{demand.tool_type}</span>
+              )}
               {/* Level badge */}
               <span style={{
                 display: "inline-flex", alignItems: "center", gap: 4,

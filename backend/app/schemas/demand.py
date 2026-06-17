@@ -44,6 +44,40 @@ def compute_demand_level(score: float) -> str:
         return "C级"
 
 
+EXPERIENCE_SERVER_KEYWORDS = ["体验服", "测试服", "先遣服", "共研服", "内测", "封测"]
+EXPERIENCE_FOCUS_KEYWORDS = [
+    ("爆料内容", ["爆料", "曝光", "情报", "前瞻", "新角色", "新英雄", "新武器", "新地图", "新玩法"]),
+    ("更新内容", ["更新", "版本", "改动", "调整", "补丁", "公告", "平衡", "上线内容"]),
+    ("资格招募", ["资格", "招募", "报名", "申请", "抢码", "激活码", "邀请码", "开启", "名额"]),
+]
+
+
+def _join_demand_text(*parts: str) -> str:
+    return " ".join(str(part or "") for part in parts)
+
+
+def extract_experience_focus(text: str) -> list[str]:
+    """提取体验服需求关注点。"""
+    focus = [
+        label
+        for label, keywords in EXPERIENCE_FOCUS_KEYWORDS
+        if any(keyword in text for keyword in keywords)
+    ]
+    return focus or ["资格招募"]
+
+
+def classify_demand_category(
+    game_name: str,
+    title: str,
+    tool_type: str,
+    description: str = "",
+    reasoning: str = "",
+) -> str:
+    """区分工具需求和体验服需求。"""
+    text = _join_demand_text(game_name, title, tool_type, description, reasoning)
+    return "experience_server" if any(keyword in text for keyword in EXPERIENCE_SERVER_KEYWORDS) else "tool"
+
+
 class DemandCard(BaseModel):
     """需求列表卡片。"""
     id: str
@@ -58,6 +92,8 @@ class DemandCard(BaseModel):
     status: str
     signals: SignalSnapshot
     llm_reasoning: str = ""
+    demand_category: str = "tool"
+    experience_focus: list[str] = []
     demand_date: date
     demand_level: str = ""
     created_at: datetime
@@ -79,6 +115,8 @@ class DemandHistoryCard(BaseModel):
     tool_feasibility: int
     status: str
     demand_level: str = ""
+    demand_category: str = "tool"
+    experience_focus: list[str] = []
     demand_date: date
     created_at: datetime
     llm_reasoning: str = ""
@@ -103,6 +141,8 @@ class DemandDetail(BaseModel):
     status: str
     signals: SignalSnapshot
     llm_analysis: LLMAnalysisOut
+    demand_category: str = "tool"
+    experience_focus: list[str] = []
     evidence_posts: list[EvidencePost] = []
     similar_past_demands: list[dict] = []
     notes: str = ""

@@ -37,6 +37,8 @@ export interface DemandCard {
   status: string
   signals: SignalSnapshot
   llm_reasoning: string
+  demand_category: "tool" | "experience_server"
+  experience_focus: string[]
   demand_date: string
   demand_level: string
   created_at: string
@@ -105,6 +107,8 @@ export interface DemandHistoryCard {
   tool_feasibility: number
   status: string
   demand_level: string
+  demand_category: "tool" | "experience_server"
+  experience_focus: string[]
   demand_date: string
   created_at: string
   llm_reasoning: string

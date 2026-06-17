@@ -156,6 +156,11 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
   const activeGameNames = new Set(activeGames.map((g) => g.name))
   const hotDemands = data?.top_demands?.filter((d) => d.potential_score >= 70).length ?? 0
   const analysis = data?.daily_analysis
+  const visibleDemands = (data?.top_demands ?? [])
+    .filter((d) => activeGameNames.has(d.game_name))
+    .sort((a, b) => b.potential_score - a.potential_score)
+  const toolDemands = visibleDemands.filter((d) => d.demand_category !== "experience_server")
+  const experienceDemands = visibleDemands.filter((d) => d.demand_category === "experience_server")
 
   if (loading) {
     return (
@@ -527,11 +532,11 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
           <div className="section-header">
             <h2><BarChart3 size={17} /> 今日需求排行</h2>
             <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-              {data?.top_demands?.filter(d => activeGameNames.has(d.game_name)).length ?? 0} 条需求
+              {visibleDemands.length} 条需求
             </span>
           </div>
 
-          {!data?.top_demands || data.top_demands.filter(d => activeGameNames.has(d.game_name)).length === 0 ? (
+          {visibleDemands.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon"><RefreshCw size={24} /></div>
               <p style={{ fontWeight: 500, marginBottom: 6 }}>暂无需求数据</p>
@@ -542,17 +547,69 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
               </button>
             </div>
           ) : (
-            <div className="demand-grid">
-              {data.top_demands
-                .filter((d) => activeGameNames.has(d.game_name))
-                .sort((a, b) => b.potential_score - a.potential_score)
-                .map((d) => (
-                  <DemandCardView key={d.id} demand={d} onClick={() => onSelect(d)} />
-                ))}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 24, alignItems: "start" }}>
+              <DemandColumn
+                title="工具需求"
+                count={toolDemands.length}
+                emptyText="暂无工具需求"
+                demands={toolDemands}
+                onSelect={onSelect}
+              />
+              <DemandColumn
+                title="体验服需求"
+                count={experienceDemands.length}
+                emptyText="暂无体验服需求"
+                demands={experienceDemands}
+                onSelect={onSelect}
+              />
             </div>
           )}
         </>
       )}
     </div>
+  )
+}
+
+function DemandColumn({
+  title,
+  count,
+  emptyText,
+  demands,
+  onSelect,
+}: {
+  title: string
+  count: number
+  emptyText: string
+  demands: DemandCard[]
+  onSelect: (d: DemandCard) => void
+}) {
+  return (
+    <section>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{title}</h3>
+        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{count} 条</span>
+      </div>
+      {demands.length === 0 ? (
+        <div style={{
+          minHeight: 110,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "var(--text-muted)",
+          fontSize: 13,
+          border: "1px dashed var(--border)",
+          borderRadius: 8,
+          background: "#f9fafb",
+        }}>
+          {emptyText}
+        </div>
+      ) : (
+        <div className="demand-grid" style={{ gridTemplateColumns: "1fr" }}>
+          {demands.map((d) => (
+            <DemandCardView key={d.id} demand={d} onClick={() => onSelect(d)} />
+          ))}
+        </div>
+      )}
+    </section>
   )
 }

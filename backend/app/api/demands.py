@@ -14,7 +14,7 @@ from app.schemas.demand import (
     DemandCard, DemandDetail, DemandUpdate,
     DemandHistoryCard, HistoryLeaderboardOut,
     SignalSnapshot, LLMAnalysisOut, EvidencePost,
-    compute_demand_level,
+    classify_demand_category, compute_demand_level, extract_experience_focus,
 )
 
 router = APIRouter(prefix="/api/demands", tags=["demands"])
@@ -39,6 +39,14 @@ async def _build_demand_card(demand: Demand, db: AsyncSession) -> DemandCard:
         llm_reasoning = llm.get("reasoning", "")
     except (json.JSONDecodeError, TypeError):
         llm_reasoning = ""
+    category = classify_demand_category(
+        game.name if game else "",
+        demand.title,
+        demand.tool_type.value,
+        demand.description,
+        llm_reasoning,
+    )
+    focus_text = " ".join([demand.title, demand.description or "", llm_reasoning])
 
     return DemandCard(
         id=demand.id,
@@ -61,6 +69,8 @@ async def _build_demand_card(demand: Demand, db: AsyncSession) -> DemandCard:
             external_platform_tool=signals_dict.get("外部平台工具上线", 0),
         ),
         llm_reasoning=llm_reasoning,
+        demand_category=category,
+        experience_focus=extract_experience_focus(focus_text) if category == "experience_server" else [],
         demand_date=demand.demand_date,
         demand_level=compute_demand_level(demand.potential_score),
         created_at=demand.created_at,
@@ -83,6 +93,14 @@ async def _build_history_card(demand: Demand, db: AsyncSession) -> DemandHistory
         llm_reasoning = llm.get("reasoning", "")
     except (json.JSONDecodeError, TypeError):
         llm_reasoning = ""
+    category = classify_demand_category(
+        game.name if game else "",
+        demand.title,
+        demand.tool_type.value,
+        demand.description,
+        llm_reasoning,
+    )
+    focus_text = " ".join([demand.title, demand.description or "", llm_reasoning])
 
     return DemandHistoryCard(
         id=demand.id,
@@ -96,6 +114,8 @@ async def _build_history_card(demand: Demand, db: AsyncSession) -> DemandHistory
         tool_feasibility=demand.tool_feasibility,
         status=demand.status.value,
         demand_level=compute_demand_level(demand.potential_score),
+        demand_category=category,
+        experience_focus=extract_experience_focus(focus_text) if category == "experience_server" else [],
         demand_date=demand.demand_date,
         created_at=demand.created_at,
         llm_reasoning=llm_reasoning,
@@ -223,6 +243,15 @@ async def get_demand_detail(demand_id: str, db: AsyncSession = Depends(get_db)):
         llm_dict = json.loads(demand.llm_analysis)
     except (json.JSONDecodeError, TypeError):
         llm_dict = {}
+    reasoning = llm_dict.get("reasoning", "")
+    category = classify_demand_category(
+        game.name if game else "",
+        demand.title,
+        demand.tool_type.value,
+        demand.description,
+        reasoning,
+    )
+    focus_text = " ".join([demand.title, demand.description or "", reasoning])
 
     # 证据帖
     try:
@@ -291,6 +320,8 @@ async def get_demand_detail(demand_id: str, db: AsyncSession = Depends(get_db)):
             reasoning=llm_dict.get("reasoning", ""),
             tool_type_suggestion=llm_dict.get("tool_type_suggestion", ""),
         ),
+        demand_category=category,
+        experience_focus=extract_experience_focus(focus_text) if category == "experience_server" else [],
         evidence_posts=evidence_posts,
         similar_past_demands=similar_list,
         notes=demand.notes,

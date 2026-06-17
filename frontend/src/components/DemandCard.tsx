@@ -28,11 +28,25 @@ const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
   "已驳回": { bg: "#fef2f2", color: "#dc2626" },
 }
 
+const CATEGORY_STYLE: Record<string, { label: string; bg: string; color: string }> = {
+  tool: { label: "工具需求", bg: "var(--primary-light)", color: "var(--primary)" },
+  experience_server: { label: "体验服需求", bg: "#ecfdf5", color: "#059669" },
+}
+
+const getDemandDisplayTitle = (demand: DemandCard) => {
+  if (demand.demand_category === "experience_server" && demand.experience_focus?.length > 0) {
+    return `${demand.game_name} · ${demand.experience_focus.join(" / ")}`
+  }
+  return demand.title
+}
+
 export default function DemandCardView({ demand, onClick, showFullSignals = true }: { demand: DemandCard; onClick: () => void; showFullSignals?: boolean }) {
   const score = Math.round(demand.potential_score)
   const level = demand.demand_level || (score >= 80 ? "S级" : score >= 60 ? "A级" : "B级")
   const lvlCfg = LEVEL_CONFIG[level] || LEVEL_CONFIG["C级"]
   const stsCfg = STATUS_STYLE[demand.status] || STATUS_STYLE["待评估"]
+  const category = CATEGORY_STYLE[demand.demand_category || "tool"] || CATEGORY_STYLE.tool
+  const displayTitle = getDemandDisplayTitle(demand)
 
   const signalEntries = Object.entries(demand.signals).filter(
     ([k]) => k in SIGNAL_LABELS
@@ -46,9 +60,10 @@ export default function DemandCardView({ demand, onClick, showFullSignals = true
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="card-meta">
             <span className="chip game">{demand.game_name}</span>
-            <span className="chip tool-type">{demand.tool_type}</span>
+            <span className="chip tool-type" style={{ background: category.bg, color: category.color }}>{category.label}</span>
+            {demand.demand_category !== "experience_server" && <span className="chip tool-type">{demand.tool_type}</span>}
           </div>
-          <div className="card-title">{demand.title}</div>
+          <div className="card-title">{displayTitle}</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flexShrink: 0, minWidth: 60 }}>
           <div
@@ -67,6 +82,16 @@ export default function DemandCardView({ demand, onClick, showFullSignals = true
           </span>
         </div>
       </div>
+
+      {demand.demand_category === "experience_server" && demand.experience_focus?.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {demand.experience_focus.map((label) => (
+            <span key={label} className="chip" style={{ fontSize: 11, background: "#f0fdf4", color: "#047857" }}>
+              {label}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Key info row: time + progress + feasibility */}
       <div style={{
