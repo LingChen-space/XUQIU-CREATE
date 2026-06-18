@@ -6,6 +6,7 @@
 import json
 import re
 import uuid
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from sqlalchemy import select, and_
@@ -18,6 +19,7 @@ from app.models.platform_content import PlatformContent
 from app.models.demand_signal import DemandSignal
 from app.models.demand import Demand, DemandStatus, ToolType
 from app.services.signal_engine import SignalEngine
+from app.utils.engagement import compute_content_hot_score
 
 
 DEMAND_ANALYSIS_PROMPT = """你是好游快爆的游戏工具需求分析师。你的任务是分析某款热门手游的用户讨论，从中挖掘出具有爆款潜力的**游戏工具需求**。
@@ -68,6 +70,75 @@ DEMAND_ANALYSIS_PROMPT = """你是好游快爆的游戏工具需求分析师。�
 """
 
 
+@dataclass(frozen=True)
+class DemandThemeRule:
+    key: str
+    tool_type: str
+    title_label: str
+    description_label: str
+    keywords: tuple[str, ...]
+    title_keywords: tuple[str, ...]
+    feasibility: int
+
+
+DEMAND_THEME_RULES = (
+    DemandThemeRule(
+        key="map",
+        tool_type="交互地图",
+        title_label="地图/点位工具",
+        description_label="地图点位、路线和资源位置",
+        keywords=("地图", "新地图", "点位", "路线", "资源点", "核电站", "出生点", "撤离点", "位置", "跑图"),
+        title_keywords=("核电站", "新地图", "地图", "点位", "资源点"),
+        feasibility=4,
+    ),
+    DemandThemeRule(
+        key="loadout",
+        tool_type="配装/战备工具",
+        title_label="卡战备/配装工具",
+        description_label="战备值、配装、配件和武器方案",
+        keywords=("卡战备", "战备值", "战备", "配装", "配件", "武器", "装备", "改枪", "阈值", "怎么搞"),
+        title_keywords=("卡战备", "战备值", "战备", "配装", "改枪"),
+        feasibility=4,
+    ),
+    DemandThemeRule(
+        key="qualification",
+        tool_type="资格/福利聚合",
+        title_label="体验服资格/福利聚合",
+        description_label="体验服资格、抢码、报名入口和开放时间",
+        keywords=("体验服", "资格", "抢码", "申请", "内测", "测试资格", "开放时间", "招募", "报名", "入口"),
+        title_keywords=("体验服资格", "资格", "抢码", "招募", "报名"),
+        feasibility=3,
+    ),
+    DemandThemeRule(
+        key="gacha",
+        tool_type="抽卡/概率分析",
+        title_label="抽卡/概率分析工具",
+        description_label="抽卡记录、概率、保底和出货分析",
+        keywords=("抽卡", "概率", "保底", "记录", "出货", "歪了", "池子"),
+        title_keywords=("抽卡", "概率", "保底"),
+        feasibility=4,
+    ),
+    DemandThemeRule(
+        key="mechanism",
+        tool_type="机制计算器",
+        title_label="机制计算器",
+        description_label="材料、养成、公式、伤害和机制参数",
+        keywords=("材料", "养成", "突破", "技能", "公式", "伤害", "倍率", "系数", "计算器", "机制"),
+        title_keywords=("计算器", "公式", "伤害", "材料"),
+        feasibility=4,
+    ),
+    DemandThemeRule(
+        key="guide",
+        tool_type="攻略辅助",
+        title_label="攻略辅助工具",
+        description_label="攻略、教程、打法、阵容和推荐方案",
+        keywords=("攻略", "教程", "打法", "阵容", "推荐", "新手", "入门", "教学"),
+        title_keywords=("攻略", "教程", "打法", "阵容"),
+        feasibility=3,
+    ),
+)
+
+
 class LLMPipeline:
     """LLM 分析管线。"""
 
@@ -87,49 +158,73 @@ class LLMPipeline:
 
     async def analyze_game(self, game: Game, window_date: date) -> dict | None:
         """对一款游戏执行 LLM 分析，返回需求卡片字典或 None。"""
-        # 获取该游戏过去24h的内容
+        analyses = await self._analyze_game_demands(game, window_date)
+        return analyses[0] if analyses else None
+
+    async def _get_recent_contents(
+        self,
+        game_id: str,
+        window_date: date,
+        limit: int | None = None,
+    ) -> list[PlatformContent]:
+        """获取指定游戏在日期窗口内的高热内容。"""
         cutoff = datetime.combine(window_date, datetime.min.time()) - timedelta(hours=24)
         end = datetime.combine(window_date, datetime.min.time()) + timedelta(hours=24)
 
         stmt = select(PlatformContent).where(
             and_(
-                PlatformContent.game_id == game.id,
+                PlatformContent.game_id == game_id,
                 PlatformContent.published_at >= cutoff,
                 PlatformContent.published_at < end,
             )
-        ).order_by(PlatformContent.hot_score.desc()).limit(20)
+        ).order_by(PlatformContent.hot_score.desc())
+        if limit is not None:
+            stmt = stmt.limit(limit)
 
         result = await self.session.execute(stmt)
-        contents = result.scalars().all()
+        return result.scalars().all()
 
+    async def _analyze_game_demands(self, game: Game, window_date: date) -> list[dict]:
+        """对一款游戏产出一个或多个需求分析结果。"""
+        contents = await self._get_recent_contents(game.id, window_date)
         if len(contents) < 2:
-            return None
+            return []
 
-        # 构建内容文本
+        signals = await self.engine.get_signals_for_game(game.id, window_date)
+
+        if self.client:
+            contents_text = self._format_contents_for_prompt(contents[:20])
+            signals_text = self._format_signals_for_prompt(signals)
+            analysis = await self._call_llm(game.name, contents_text, signals_text)
+            return [analysis] if analysis else []
+
+        analyses = self._theme_analysis_from_contents(game, contents, signals)
+        if analyses:
+            return analyses
+
+        fallback = self._fallback_analysis(game, signals)
+        return [fallback] if fallback else []
+
+    def _format_contents_for_prompt(self, contents: list[PlatformContent]) -> str:
+        """构建 LLM 提示词里的内容列表。"""
         content_parts = []
         for i, c in enumerate(contents):
-            part = f"[{i+1}] 平台: {c.platform.value} | 类型: {c.content_type.value} | 标题: {c.title}\n"
+            platform = c.platform.value if hasattr(c.platform, "value") else str(c.platform)
+            content_type = c.content_type.value if hasattr(c.content_type, "value") else str(c.content_type)
+            part = f"[{i+1}] 平台: {platform} | 类型: {content_type} | 标题: {c.title}\n"
             part += f"    互动: 浏览{c.view_count} 赞{c.like_count} 评{c.comment_count}\n"
             if c.body:
                 part += f"    摘要: {c.body[:200]}\n"
             content_parts.append(part)
-        contents_text = "\n".join(content_parts)
+        return "\n".join(content_parts)
 
-        # 获取信号分
-        signals = await self.engine.get_signals_for_game(game.id, window_date)
+    def _format_signals_for_prompt(self, signals: dict) -> str:
+        """构建 LLM 提示词里的信号分列表。"""
         signals_lines = []
         for name, score in signals.items():
             bar = "█" * int(score / 10) + "░" * (10 - int(score / 10))
             signals_lines.append(f"  {name}: [{bar}] {score:.0f}/100")
-        signals_text = "\n".join(signals_lines) if signals_lines else "暂无信号数据"
-
-        # 调用 LLM 或 Fallback
-        if self.client:
-            analysis = await self._call_llm(game.name, contents_text, signals_text)
-        else:
-            analysis = self._fallback_analysis(game, signals)
-
-        return analysis
+        return "\n".join(signals_lines) if signals_lines else "暂无信号数据"
 
     async def _call_llm(self, game_name: str, contents_text: str, signals_text: str) -> dict:
         """调用 LLM API 进行分析。"""
@@ -176,6 +271,125 @@ class LLMPipeline:
             return json.loads(match.group())
         except json.JSONDecodeError:
             return None
+
+    def _theme_analysis_from_contents(self, game: Game, contents: list[PlatformContent], signals: dict) -> list[dict]:
+        """从具体内容关键词和热度中提取多个需求主题。"""
+        theme_stats: dict[str, dict] = {}
+
+        for content in contents:
+            title = content.title or ""
+            body = content.body or ""
+            title_text = title.lower()
+            body_text = body.lower()
+            heat = max(
+                float(getattr(content, "hot_score", 0) or 0),
+                compute_content_hot_score(
+                    getattr(content, "view_count", 0),
+                    getattr(content, "like_count", 0),
+                    getattr(content, "comment_count", 0),
+                    getattr(content, "share_count", 0),
+                ),
+            )
+
+            for rule in DEMAND_THEME_RULES:
+                title_hits = [kw for kw in rule.keywords if kw.lower() in title_text]
+                body_hits = [kw for kw in rule.keywords if kw.lower() in body_text]
+                if not title_hits and not body_hits:
+                    continue
+
+                stat = theme_stats.setdefault(rule.key, {
+                    "rule": rule,
+                    "matched_contents": [],
+                    "title_hits": 0,
+                    "keyword_hits": 0,
+                    "heat_sum": 0.0,
+                    "max_heat": 0.0,
+                    "focus_counts": {},
+                })
+                stat["matched_contents"].append(content)
+                stat["title_hits"] += len(title_hits)
+                stat["keyword_hits"] += len(title_hits) + len(body_hits)
+                stat["heat_sum"] += heat
+                stat["max_heat"] = max(stat["max_heat"], heat)
+
+                for kw in title_hits + body_hits:
+                    stat["focus_counts"][kw] = stat["focus_counts"].get(kw, 0) + (2 if kw in title_hits else 1)
+
+        analyses: list[dict] = []
+        priority_weight = max(1, min(int(getattr(game, "priority_weight", 1) or 1), 5))
+        priority_multiplier = 1 + (priority_weight - 1) * 0.08
+
+        for stat in theme_stats.values():
+            rule: DemandThemeRule = stat["rule"]
+            matched_contents = stat["matched_contents"]
+            if not matched_contents:
+                continue
+
+            focus = self._select_theme_focus(rule, stat["focus_counts"])
+            avg_heat = stat["heat_sum"] / len(matched_contents)
+            potential = (
+                len(matched_contents) * 12
+                + stat["title_hits"] * 8
+                + stat["keyword_hits"] * 3
+                + avg_heat * 0.35
+                + stat["max_heat"] * 0.25
+            ) * priority_multiplier
+            potential_score = round(min(100.0, potential), 0)
+            if potential_score < 35:
+                continue
+
+            evidence_posts = sorted(
+                matched_contents,
+                key=lambda c: max(
+                    float(getattr(c, "hot_score", 0) or 0),
+                    compute_content_hot_score(
+                        getattr(c, "view_count", 0),
+                        getattr(c, "like_count", 0),
+                        getattr(c, "comment_count", 0),
+                        getattr(c, "share_count", 0),
+                    ),
+                ),
+                reverse=True,
+            )[:5]
+            top_titles = [c.title for c in evidence_posts if getattr(c, "title", "")]
+            focus_prefix = f"{focus}" if focus else rule.title_label
+            tool_title = self._build_theme_title(game.name, rule, focus)
+
+            analyses.append({
+                "high_freq_questions": top_titles[:5],
+                "info_gap": f"近24小时内容集中提到{focus_prefix}，但信息分散在多篇帖子和摘要中，需要聚合成可直接使用的{rule.description_label}。",
+                "tool_feasibility": rule.feasibility,
+                "tool_type_suggestion": rule.tool_type,
+                "tool_title": tool_title,
+                "tool_description": f"聚合{game.name}相关{rule.description_label}，按热度内容提炼可操作信息。",
+                "reasoning": (
+                    f"{len(matched_contents)}篇内容命中“{focus_prefix}”相关关键词，"
+                    f"标题命中{stat['title_hits']}次，最高热度{stat['max_heat']:.0f}分。"
+                ),
+                "potential_score": potential_score,
+                "evidence_post_ids": [p.id for p in evidence_posts if getattr(p, "id", None)],
+                "theme_key": rule.key,
+            })
+
+        return sorted(analyses, key=lambda item: item["potential_score"], reverse=True)
+
+    def _select_theme_focus(self, rule: DemandThemeRule, focus_counts: dict[str, int]) -> str:
+        """选择最适合放进需求标题的具体主题词。"""
+        for kw in rule.title_keywords:
+            if kw in focus_counts:
+                return kw
+        if not focus_counts:
+            return ""
+        return max(focus_counts, key=focus_counts.get)
+
+    def _build_theme_title(self, game_name: str, rule: DemandThemeRule, focus: str) -> str:
+        """生成自然的需求标题，避免体验服等词重复。"""
+        suffix = rule.title_label
+        if focus and focus not in suffix:
+            suffix = f"{focus}{suffix}"
+        if game_name.endswith("体验服") and suffix.startswith("体验服"):
+            suffix = suffix[len("体验服"):]
+        return f"{game_name}{suffix}"
 
     def _fallback_analysis(self, game: Game, signals: dict) -> dict:
         """
@@ -239,8 +453,8 @@ class LLMPipeline:
 
         demands = []
         for game in games:
-            analysis = await self.analyze_game(game, window_date)
-            if not analysis:
+            analyses = await self._analyze_game_demands(game, window_date)
+            if not analyses:
                 continue
 
             # 获取信号快照
@@ -265,43 +479,48 @@ class LLMPipeline:
             ev_result = await self.session.execute(evidence_stmt)
             evidence_posts = ev_result.scalars().all()
 
-            # 解析 tool_type
-            tool_type_str = analysis.get("tool_type_suggestion", "其他")
-            try:
-                tool_type = ToolType._value2member_map_.get(tool_type_str, ToolType.other)
-            except Exception:
-                tool_type = ToolType.other
+            for analysis in analyses:
+                # 解析 tool_type
+                tool_type_str = analysis.get("tool_type_suggestion", "其他")
+                try:
+                    tool_type = ToolType._value2member_map_.get(tool_type_str, ToolType.other)
+                except Exception:
+                    tool_type = ToolType.other
 
-            demand_stmt = (
-                select(Demand)
-                .where(
-                    and_(
-                        Demand.game_id == game.id,
-                        Demand.demand_date == window_date,
+                title = analysis.get("tool_title", f"{game.name}工具需求")
+                demand_stmt = (
+                    select(Demand)
+                    .where(
+                        and_(
+                            Demand.game_id == game.id,
+                            Demand.demand_date == window_date,
+                            Demand.tool_type == tool_type,
+                            Demand.title == title,
+                        )
                     )
+                    .order_by(Demand.created_at.desc())
                 )
-                .order_by(Demand.created_at.desc())
-            )
-            demand_result = await self.session.execute(demand_stmt)
-            demand = demand_result.scalar()
-            if demand is None:
-                demand = Demand(
-                    id=str(uuid.uuid4()),
-                    game_id=game.id,
-                    status=DemandStatus.new,
-                    demand_date=window_date,
-                )
-                self.session.add(demand)
+                demand_result = await self.session.execute(demand_stmt)
+                demand = demand_result.scalar()
+                if demand is None:
+                    demand = Demand(
+                        id=str(uuid.uuid4()),
+                        game_id=game.id,
+                        status=DemandStatus.new,
+                        demand_date=window_date,
+                    )
+                    self.session.add(demand)
 
-            demand.tool_type = tool_type
-            demand.title = analysis.get("tool_title", f"{game.name}工具需求")
-            demand.description = analysis.get("tool_description", "")
-            demand.potential_score = float(analysis.get("potential_score", 0))
-            demand.tool_feasibility = int(analysis.get("tool_feasibility", 0))
-            demand.signal_snapshot = json.dumps(signals, ensure_ascii=False)
-            demand.llm_analysis = json.dumps(analysis, ensure_ascii=False)
-            demand.evidence_post_ids = json.dumps([p.id for p in evidence_posts], ensure_ascii=False)
-            demands.append(demand)
+                evidence_ids = analysis.get("evidence_post_ids") or [p.id for p in evidence_posts]
+                demand.tool_type = tool_type
+                demand.title = title
+                demand.description = analysis.get("tool_description", "")
+                demand.potential_score = float(analysis.get("potential_score", 0))
+                demand.tool_feasibility = int(analysis.get("tool_feasibility", 0))
+                demand.signal_snapshot = json.dumps(signals, ensure_ascii=False)
+                demand.llm_analysis = json.dumps(analysis, ensure_ascii=False)
+                demand.evidence_post_ids = json.dumps(evidence_ids[:5], ensure_ascii=False)
+                demands.append(demand)
 
         await self.session.commit()
         return demands

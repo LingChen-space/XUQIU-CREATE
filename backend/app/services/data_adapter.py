@@ -19,6 +19,7 @@ from app.models.game import Game, GameStatus, GameGenre
 from app.models.platform_content import PlatformContent, ContentPlatform, ContentType
 from app.models.platform_search_config import PlatformSearchConfig
 from app.models.crawl_progress import CrawlProgress
+from app.utils.engagement import compute_content_hot_score
 
 logger = logging.getLogger(__name__)
 
@@ -196,6 +197,22 @@ def _first_text(*values) -> str:
         if text:
             return text
     return ""
+
+
+def _first_int(*values) -> int:
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, (int, float)):
+            return max(0, int(value))
+        if isinstance(value, str) and value.strip():
+            try:
+                return max(0, int(float(value.strip())))
+            except ValueError:
+                continue
+    return 0
 
 
 def _extract_query_param(url: str, name: str) -> str:
@@ -544,7 +561,7 @@ class DataAdapter:
             create_at = item.get("create_at", 0)
             pub_time = datetime.fromtimestamp(create_at) if create_at else now
             view_count = 0
-            comment_count = 0
+            comment_count = _first_int(item.get("comments"), item.get("comment_count"), item.get("reply_num"))
         elif platform_key == "taptap":
             title = item.get("title", "")
             body = item.get("summary", "")
@@ -554,7 +571,7 @@ class DataAdapter:
             moment_id = item.get("id_str", "")
             url = f"https://www.taptap.cn/moment/{moment_id}" if moment_id else ""
             view_count = 0
-            comment_count = 0
+            comment_count = _first_int(item.get("comments"), item.get("comment_count"), item.get("reply_num"))
         elif platform_key == "douyin":
             title = item.get("video_desc", "")
             body = item.get("video_desc", "")
@@ -566,7 +583,7 @@ class DataAdapter:
             except (ValueError, TypeError):
                 pub_time = now
             view_count = 0
-            comment_count = 0
+            comment_count = _first_int(item.get("comment_count"), item.get("comments"))
         else:
             title = item.get("title", "")
             body = item.get("body", item.get("description", ""))
@@ -574,9 +591,9 @@ class DataAdapter:
             pub_time = now
             view_count = 0
             like_count = 0
-            comment_count = 0
+            comment_count = _first_int(item.get("comments"), item.get("comment_count"))
 
-        hot_score = min(100.0, (like_count * 0.5) + (view_count / 2000))
+        hot_score = compute_content_hot_score(view_count, like_count, comment_count, 0)
 
         return {
             "platform": platform_label,
