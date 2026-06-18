@@ -1,4 +1,4 @@
-import { Clock, Gauge } from "lucide-react"
+import { BellRing, Clock, Gauge, Megaphone, RefreshCw } from "lucide-react"
 import type { DemandCard } from "../types"
 
 const SIGNAL_LABELS: Record<string, string> = {
@@ -40,6 +40,46 @@ const getDemandDisplayTitle = (demand: DemandCard) => {
   return demand.title
 }
 
+const getExperienceInsight = (demand: DemandCard) => {
+  return demand.experience_insight || {
+    update_content: "未发现更新内容",
+    leak_content: "未发现爆料内容",
+    recruitment_status: demand.experience_focus?.includes("资格招募") ? "发现资格招募相关消息" : "未发现资格招募开启消息",
+    recruitment_open: demand.experience_focus?.includes("资格招募") || false,
+  }
+}
+
+function ExperienceInsightList({ demand }: { demand: DemandCard }) {
+  const insight = getExperienceInsight(demand)
+  const rows = [
+    { label: "更新内容", value: insight.update_content, icon: RefreshCw, tone: "#2563eb", bg: "var(--primary-light)" },
+    { label: "爆料内容", value: insight.leak_content, icon: Megaphone, tone: "#7c3aed", bg: "var(--purple-light)" },
+    {
+      label: "资格招募",
+      value: insight.recruitment_status,
+      icon: BellRing,
+      tone: insight.recruitment_open ? "#059669" : "#6b7280",
+      bg: insight.recruitment_open ? "var(--green-light)" : "#f3f4f6",
+    },
+  ]
+
+  return (
+    <div className="experience-insight-list">
+      {rows.map(({ label, value, icon: Icon, tone, bg }) => (
+        <div key={label} className="experience-insight-row">
+          <span className="experience-insight-icon" style={{ background: bg, color: tone }}>
+            <Icon size={13} />
+          </span>
+          <div className="experience-insight-copy">
+            <span className="experience-insight-label">{label}</span>
+            <span className="experience-insight-text">{value}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function DemandCardView({ demand, onClick, showFullSignals = true }: { demand: DemandCard; onClick: () => void; showFullSignals?: boolean }) {
   const score = Math.round(demand.potential_score)
   const level = demand.demand_level || (score >= 80 ? "S级" : score >= 60 ? "A级" : "B级")
@@ -47,6 +87,7 @@ export default function DemandCardView({ demand, onClick, showFullSignals = true
   const stsCfg = STATUS_STYLE[demand.status] || STATUS_STYLE["待评估"]
   const category = CATEGORY_STYLE[demand.demand_category || "tool"] || CATEGORY_STYLE.tool
   const displayTitle = getDemandDisplayTitle(demand)
+  const isExperienceServer = demand.demand_category === "experience_server"
 
   const signalEntries = Object.entries(demand.signals).filter(
     ([k]) => k in SIGNAL_LABELS
@@ -61,7 +102,7 @@ export default function DemandCardView({ demand, onClick, showFullSignals = true
           <div className="card-meta">
             <span className="chip game">{demand.game_name}</span>
             <span className="chip tool-type" style={{ background: category.bg, color: category.color }}>{category.label}</span>
-            {demand.demand_category !== "experience_server" && <span className="chip tool-type">{demand.tool_type}</span>}
+            {!isExperienceServer && <span className="chip tool-type">{demand.tool_type}</span>}
           </div>
           <div className="card-title">{displayTitle}</div>
         </div>
@@ -83,7 +124,7 @@ export default function DemandCardView({ demand, onClick, showFullSignals = true
         </div>
       </div>
 
-      {demand.demand_category === "experience_server" && demand.experience_focus?.length > 0 && (
+      {isExperienceServer && demand.experience_focus?.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
           {demand.experience_focus.map((label) => (
             <span key={label} className="chip" style={{ fontSize: 11, background: "#f0fdf4", color: "#047857" }}>
@@ -92,6 +133,8 @@ export default function DemandCardView({ demand, onClick, showFullSignals = true
           ))}
         </div>
       )}
+
+      {isExperienceServer && <ExperienceInsightList demand={demand} />}
 
       {/* Key info row: time + progress + feasibility */}
       <div style={{
@@ -126,7 +169,7 @@ export default function DemandCardView({ demand, onClick, showFullSignals = true
       </div>
 
       {/* Signal mini bars */}
-      {showFullSignals && (
+      {showFullSignals && !isExperienceServer && (
         <div className="signal-minis">
           {signalEntries.map(([key, val], i) => (
             <div key={key} className="signal-mini">
@@ -142,12 +185,14 @@ export default function DemandCardView({ demand, onClick, showFullSignals = true
         </div>
       )}
 
-      {demand.llm_reasoning ? (
-        <div className="card-reason">{demand.llm_reasoning}</div>
-      ) : (
-        <div className="card-reason" style={{ color: "var(--text-muted)", fontStyle: "italic" }}>
-          等待 LLM 分析...
-        </div>
+      {!isExperienceServer && (
+        demand.llm_reasoning ? (
+          <div className="card-reason">{demand.llm_reasoning}</div>
+        ) : (
+          <div className="card-reason" style={{ color: "var(--text-muted)", fontStyle: "italic" }}>
+            等待 LLM 分析...
+          </div>
+        )
       )}
     </div>
   )

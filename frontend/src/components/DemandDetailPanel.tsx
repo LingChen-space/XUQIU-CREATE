@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { X, ExternalLink, Loader2, Clock, Gauge, Flag } from "lucide-react"
+import { BellRing, ExternalLink, Loader2, Clock, Gauge, Flag, Megaphone, RefreshCw, X } from "lucide-react"
 import { api } from "../api/client"
 import type { DemandCard, DemandDetail } from "../types"
 import RadarChart from "./RadarChart"
@@ -19,6 +19,66 @@ const getDemandDisplayTitle = (demand: DemandCard | DemandDetail) => {
     return `${demand.game_name} · ${demand.experience_focus.join(" / ")}`
   }
   return demand.title
+}
+
+const getExperienceInsight = (demand: DemandCard | DemandDetail) => {
+  return demand.experience_insight || {
+    update_content: "未发现更新内容",
+    leak_content: "未发现爆料内容",
+    recruitment_status: demand.experience_focus?.includes("资格招募") ? "发现资格招募相关消息" : "未发现资格招募开启消息",
+    recruitment_open: demand.experience_focus?.includes("资格招募") || false,
+  }
+}
+
+function ExperienceInsightPanel({ demand }: { demand: DemandCard | DemandDetail }) {
+  const insight = getExperienceInsight(demand)
+  const rows = [
+    { label: "更新内容", value: insight.update_content, icon: RefreshCw, tone: "#2563eb", bg: "var(--primary-light)" },
+    { label: "爆料内容", value: insight.leak_content, icon: Megaphone, tone: "#7c3aed", bg: "var(--purple-light)" },
+    {
+      label: "资格招募",
+      value: insight.recruitment_status,
+      icon: BellRing,
+      tone: insight.recruitment_open ? "#059669" : "#6b7280",
+      bg: insight.recruitment_open ? "var(--green-light)" : "#f3f4f6",
+    },
+  ]
+
+  return (
+    <div className="slideover-section">
+      <h4>体验服内容</h4>
+      <div style={{ display: "grid", gap: 10 }}>
+        {rows.map(({ label, value, icon: Icon, tone, bg }) => (
+          <div key={label} style={{
+            display: "grid",
+            gridTemplateColumns: "32px minmax(0, 1fr)",
+            gap: 12,
+            alignItems: "start",
+            padding: "12px 14px",
+            background: "#f9fafb",
+            borderRadius: 8,
+          }}>
+            <span style={{
+              width: 32,
+              height: 32,
+              borderRadius: 7,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: bg,
+              color: tone,
+            }}>
+              <Icon size={15} />
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 3 }}>{label}</div>
+              <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.7 }}>{value}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 const LEVEL_CONFIG: Record<string, { bg: string; color: string; label: string }> = {
@@ -117,6 +177,8 @@ export default function DemandDetailPanel({ demand, onClose }: { demand: DemandC
             </div>
           ) : d ? (
             <>
+              {d.demand_category === "experience_server" && <ExperienceInsightPanel demand={d} />}
+
               {/* Signal radar */}
               <div className="slideover-section">
                 <h4>需求信号</h4>
@@ -148,53 +210,54 @@ export default function DemandDetailPanel({ demand, onClose }: { demand: DemandC
                 </div>
               </div>
 
-              {/* LLM Analysis */}
-              <div className="slideover-section">
-                <h4>LLM 分析</h4>
-                <div style={{ background: "#f9fafb", borderRadius: 10, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
-                  {d.llm_analysis.high_freq_questions?.length > 0 && (
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
-                        玩家高频问题
-                      </div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                        {d.llm_analysis.high_freq_questions.map((q, i) => (
-                          <span key={i} className="chip" style={{ background: "var(--primary-light)", color: "var(--primary)", fontSize: 12 }}>
-                            {q}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>信息缺口</div>
-                    <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.6 }}>
-                      {d.llm_analysis.info_gap || "暂无"}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>分析推理</div>
-                    <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.7 }}>
-                      {d.llm_analysis.reasoning || d.llm_reasoning || "暂无"}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 24, paddingTop: 8, borderTop: "1px solid #e5e7eb" }}>
-                    <div>
-                      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>工具化可行度 </span>
-                      <span style={{ fontWeight: 700, fontSize: 15 }}>
-                        {d.llm_analysis.tool_feasibility || d.tool_feasibility}
-                      </span>
-                      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>/5</span>
-                    </div>
-                    {d.llm_analysis.tool_type_suggestion && (
+              {d.demand_category !== "experience_server" && (
+                <div className="slideover-section">
+                  <h4>LLM 分析</h4>
+                  <div style={{ background: "#f9fafb", borderRadius: 10, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
+                    {d.llm_analysis.high_freq_questions?.length > 0 && (
                       <div>
-                        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>建议类型 </span>
-                        <span className="chip" style={{ fontSize: 12 }}>{d.llm_analysis.tool_type_suggestion}</span>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
+                          玩家高频问题
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {d.llm_analysis.high_freq_questions.map((q, i) => (
+                            <span key={i} className="chip" style={{ background: "var(--primary-light)", color: "var(--primary)", fontSize: 12 }}>
+                              {q}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     )}
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>信息缺口</div>
+                      <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.6 }}>
+                        {d.llm_analysis.info_gap || "暂无"}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>分析推理</div>
+                      <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.7 }}>
+                        {d.llm_analysis.reasoning || d.llm_reasoning || "暂无"}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 24, paddingTop: 8, borderTop: "1px solid #e5e7eb" }}>
+                      <div>
+                        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>工具化可行度 </span>
+                        <span style={{ fontWeight: 700, fontSize: 15 }}>
+                          {d.llm_analysis.tool_feasibility || d.tool_feasibility}
+                        </span>
+                        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>/5</span>
+                      </div>
+                      {d.llm_analysis.tool_type_suggestion && (
+                        <div>
+                          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>建议类型 </span>
+                          <span className="chip" style={{ fontSize: 12 }}>{d.llm_analysis.tool_type_suggestion}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Evidence posts */}
               {d.evidence_posts?.length > 0 && (
@@ -246,7 +309,7 @@ export default function DemandDetailPanel({ demand, onClose }: { demand: DemandC
               )}
 
               {/* Similar past demands */}
-              {d.similar_past_demands?.length > 0 && (
+              {d.demand_category !== "experience_server" && d.similar_past_demands?.length > 0 && (
                 <div className="slideover-section">
                   <h4>相似历史需求</h4>
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>

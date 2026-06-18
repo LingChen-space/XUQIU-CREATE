@@ -3,6 +3,7 @@
 from pydantic import BaseModel, field_validator
 from datetime import datetime, date
 from typing import Optional
+import re
 
 
 class SignalSnapshot(BaseModel):
@@ -32,6 +33,13 @@ class EvidencePost(BaseModel):
     relevance: str = "high"
 
 
+class ExperienceServerInsight(BaseModel):
+    update_content: str = "未发现更新内容"
+    leak_content: str = "未发现爆料内容"
+    recruitment_status: str = "未发现资格招募开启消息"
+    recruitment_open: bool = False
+
+
 def compute_demand_level(score: float) -> str:
     """根据潜力分计算需求等级。"""
     if score >= 85:
@@ -51,6 +59,11 @@ EXPERIENCE_FOCUS_KEYWORDS = [
     ("资格招募", ["资格", "招募", "报名", "申请", "抢码", "激活码", "邀请码", "开启", "名额"]),
 ]
 
+UPDATE_CONTENT_KEYWORDS = ["更新", "版本", "改动", "调整", "补丁", "公告", "平衡", "上线内容", "新增", "优化", "修复"]
+LEAK_CONTENT_KEYWORDS = ["爆料", "曝光", "情报", "前瞻", "新角色", "新英雄", "新武器", "新地图", "新玩法", "登场"]
+RECRUITMENT_KEYWORDS = ["资格", "招募", "报名", "申请", "抢码", "激活码", "邀请码", "名额"]
+RECRUITMENT_OPEN_KEYWORDS = ["已开启", "开启", "开放", "报名", "申请", "招募", "发放", "抢码"]
+
 
 def _join_demand_text(*parts: str) -> str:
     return " ".join(str(part or "") for part in parts)
@@ -64,6 +77,36 @@ def extract_experience_focus(text: str) -> list[str]:
         if any(keyword in text for keyword in keywords)
     ]
     return focus or ["资格招募"]
+
+
+def _split_experience_sentences(text: str) -> list[str]:
+    normalized = re.sub(r"\s+", " ", text or "").strip()
+    return [
+        sentence.strip(" ，,。；;：:")
+        for sentence in re.split(r"[。！？!?；;\n]+", normalized)
+        if sentence.strip(" ，,。；;：:")
+    ]
+
+
+def _find_experience_sentence(text: str, keywords: list[str], fallback: str) -> str:
+    for sentence in _split_experience_sentences(text):
+        if any(keyword in sentence for keyword in keywords):
+            return sentence[:80]
+    return fallback
+
+
+def build_experience_server_insight(*parts: str) -> ExperienceServerInsight:
+    """将体验服需求整理成更新、爆料、资格招募三项展示信息。"""
+    text = _join_demand_text(*parts)
+    recruitment_status = _find_experience_sentence(text, RECRUITMENT_KEYWORDS, "")
+    recruitment_open = bool(recruitment_status) and any(keyword in recruitment_status for keyword in RECRUITMENT_OPEN_KEYWORDS)
+
+    return ExperienceServerInsight(
+        update_content=_find_experience_sentence(text, UPDATE_CONTENT_KEYWORDS, "未发现更新内容"),
+        leak_content=_find_experience_sentence(text, LEAK_CONTENT_KEYWORDS, "未发现爆料内容"),
+        recruitment_status=recruitment_status or "未发现资格招募开启消息",
+        recruitment_open=recruitment_open,
+    )
 
 
 def classify_demand_category(
@@ -94,6 +137,7 @@ class DemandCard(BaseModel):
     llm_reasoning: str = ""
     demand_category: str = "tool"
     experience_focus: list[str] = []
+    experience_insight: ExperienceServerInsight | None = None
     demand_date: date
     demand_level: str = ""
     created_at: datetime
@@ -117,6 +161,7 @@ class DemandHistoryCard(BaseModel):
     demand_level: str = ""
     demand_category: str = "tool"
     experience_focus: list[str] = []
+    experience_insight: ExperienceServerInsight | None = None
     demand_date: date
     created_at: datetime
     llm_reasoning: str = ""
@@ -143,6 +188,7 @@ class DemandDetail(BaseModel):
     llm_analysis: LLMAnalysisOut
     demand_category: str = "tool"
     experience_focus: list[str] = []
+    experience_insight: ExperienceServerInsight | None = None
     evidence_posts: list[EvidencePost] = []
     similar_past_demands: list[dict] = []
     notes: str = ""

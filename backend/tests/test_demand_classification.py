@@ -2,7 +2,11 @@
 
 import unittest
 
-from app.schemas.demand import classify_demand_category, extract_experience_focus
+from app.schemas.demand import (
+    build_experience_server_insight,
+    classify_demand_category,
+    extract_experience_focus,
+)
 
 
 class DemandClassificationTest(unittest.TestCase):
@@ -34,6 +38,23 @@ class DemandClassificationTest(unittest.TestCase):
         )
 
         self.assertEqual(category, "tool")
+
+    def test_experience_server_insight_splits_updates_leaks_and_recruitment(self):
+        insight = build_experience_server_insight(
+            "体验服版本更新：新增地图和武器平衡调整。",
+            "爆料称新角色将在测试服登场，资格招募已开启报名。",
+        )
+
+        self.assertIn("新增地图", insight.update_content)
+        self.assertIn("新角色", insight.leak_content)
+        self.assertIn("资格招募已开启", insight.recruitment_status)
+        self.assertTrue(insight.recruitment_open)
+
+    def test_experience_server_insight_reports_missing_recruitment(self):
+        insight = build_experience_server_insight("体验服更新内容曝光，新玩法即将测试。")
+
+        self.assertEqual(insight.recruitment_status, "未发现资格招募开启消息")
+        self.assertFalse(insight.recruitment_open)
 
 
 if __name__ == "__main__":

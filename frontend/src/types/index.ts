@@ -24,6 +24,13 @@ export interface EvidencePost {
   relevance: string
 }
 
+export interface ExperienceServerInsight {
+  update_content: string
+  leak_content: string
+  recruitment_status: string
+  recruitment_open: boolean
+}
+
 export interface DemandCard {
   id: string
   game_id: string
@@ -39,6 +46,7 @@ export interface DemandCard {
   llm_reasoning: string
   demand_category: "tool" | "experience_server"
   experience_focus: string[]
+  experience_insight: ExperienceServerInsight | null
   demand_date: string
   demand_level: string
   created_at: string
@@ -109,6 +117,7 @@ export interface DemandHistoryCard {
   demand_level: string
   demand_category: "tool" | "experience_server"
   experience_focus: string[]
+  experience_insight: ExperienceServerInsight | null
   demand_date: string
   created_at: string
   llm_reasoning: string

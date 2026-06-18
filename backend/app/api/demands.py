@@ -14,7 +14,10 @@ from app.schemas.demand import (
     DemandCard, DemandDetail, DemandUpdate,
     DemandHistoryCard, HistoryLeaderboardOut,
     SignalSnapshot, LLMAnalysisOut, EvidencePost,
-    classify_demand_category, compute_demand_level, extract_experience_focus,
+    build_experience_server_insight,
+    classify_demand_category,
+    compute_demand_level,
+    extract_experience_focus,
 )
 
 router = APIRouter(prefix="/api/demands", tags=["demands"])
@@ -47,6 +50,12 @@ async def _build_demand_card(demand: Demand, db: AsyncSession) -> DemandCard:
         llm_reasoning,
     )
     focus_text = " ".join([demand.title, demand.description or "", llm_reasoning])
+    experience_focus = extract_experience_focus(focus_text) if category == "experience_server" else []
+    experience_insight = (
+        build_experience_server_insight(demand.title, demand.description, llm_reasoning)
+        if category == "experience_server"
+        else None
+    )
 
     return DemandCard(
         id=demand.id,
@@ -70,7 +79,8 @@ async def _build_demand_card(demand: Demand, db: AsyncSession) -> DemandCard:
         ),
         llm_reasoning=llm_reasoning,
         demand_category=category,
-        experience_focus=extract_experience_focus(focus_text) if category == "experience_server" else [],
+        experience_focus=experience_focus,
+        experience_insight=experience_insight,
         demand_date=demand.demand_date,
         demand_level=compute_demand_level(demand.potential_score),
         created_at=demand.created_at,
@@ -101,6 +111,12 @@ async def _build_history_card(demand: Demand, db: AsyncSession) -> DemandHistory
         llm_reasoning,
     )
     focus_text = " ".join([demand.title, demand.description or "", llm_reasoning])
+    experience_focus = extract_experience_focus(focus_text) if category == "experience_server" else []
+    experience_insight = (
+        build_experience_server_insight(demand.title, demand.description, llm_reasoning)
+        if category == "experience_server"
+        else None
+    )
 
     return DemandHistoryCard(
         id=demand.id,
@@ -115,7 +131,8 @@ async def _build_history_card(demand: Demand, db: AsyncSession) -> DemandHistory
         status=demand.status.value,
         demand_level=compute_demand_level(demand.potential_score),
         demand_category=category,
-        experience_focus=extract_experience_focus(focus_text) if category == "experience_server" else [],
+        experience_focus=experience_focus,
+        experience_insight=experience_insight,
         demand_date=demand.demand_date,
         created_at=demand.created_at,
         llm_reasoning=llm_reasoning,
@@ -272,6 +289,13 @@ async def get_demand_detail(demand_id: str, db: AsyncSession = Depends(get_db)):
                 title=c.title,
                 relevance="high",
             ))
+    evidence_text = " ".join(ep.title for ep in evidence_posts)
+    experience_focus = extract_experience_focus(focus_text) if category == "experience_server" else []
+    experience_insight = (
+        build_experience_server_insight(demand.title, demand.description, reasoning, evidence_text)
+        if category == "experience_server"
+        else None
+    )
 
     # 相似历史需求
     sim_stmt = (
@@ -321,7 +345,8 @@ async def get_demand_detail(demand_id: str, db: AsyncSession = Depends(get_db)):
             tool_type_suggestion=llm_dict.get("tool_type_suggestion", ""),
         ),
         demand_category=category,
-        experience_focus=extract_experience_focus(focus_text) if category == "experience_server" else [],
+        experience_focus=experience_focus,
+        experience_insight=experience_insight,
         evidence_posts=evidence_posts,
         similar_past_demands=similar_list,
         notes=demand.notes,
