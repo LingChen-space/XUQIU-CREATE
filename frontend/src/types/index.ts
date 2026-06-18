@@ -143,6 +143,7 @@ export interface SearchConfig {
   keywords: string
   enabled: boolean
   crawl_count: number
+  proxy_url: string | null
   created_at: string
   updated_at: string
 }

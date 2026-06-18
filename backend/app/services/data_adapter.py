@@ -15,11 +15,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models.game import Game, GameStatus, GameGenre, default_priority_weight
+from app.models.game import Game, GameStatus, GameGenre
 from app.models.platform_content import PlatformContent, ContentPlatform, ContentType
 from app.models.platform_search_config import PlatformSearchConfig
 from app.models.crawl_progress import CrawlProgress
-from app.utils.engagement import compute_content_hot_score
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +44,22 @@ def _extract_monitor_error(response: httpx.Response) -> str:
 
     return str(data)
 
+
+def _is_taptap_risk_control(status_code: int, detail: str) -> bool:
+    """TapTap 405 is wrapped by the monitor service as a risk-control failure."""
+    normalized = detail.lower()
+    return (
+        status_code == 405
+        or (
+            status_code == 403
+            and (
+                "405" in normalized
+                or "风控" in detail
+                or "risk" in normalized
+            )
+        )
+    )
+
 # 平台标识映射
 PLATFORM_MAP: dict[str, ContentPlatform] = {
     "douyin": ContentPlatform.douyin,
@@ -67,7 +82,7 @@ MONITOR_PLATFORM_ENDPOINTS: dict[str, str] = {
 
 MOCK_GAMES = [
     {"name": "三角洲行动", "genre": GameGenre.fps, "publisher": "腾讯", "status": GameStatus.operating,
-     "description": "腾讯天美工作室出品的战术射击手游", "priority_weight": 3},
+     "description": "腾讯天美工作室出品的战术射击手游"},
     {"name": "原神", "genre": GameGenre.open_world, "publisher": "米哈游", "status": GameStatus.operating,
      "description": "开放世界冒险RPG"},
     {"name": "鸣潮", "genre": GameGenre.open_world, "publisher": "库洛游戏", "status": GameStatus.operating,
@@ -75,7 +90,7 @@ MOCK_GAMES = [
     {"name": "火影忍者", "genre": GameGenre.rpg, "publisher": "腾讯", "status": GameStatus.operating,
      "description": "火影忍者正版授权格斗手游"},
     {"name": "洛克王国：世界", "genre": GameGenre.rpg, "publisher": "腾讯", "status": GameStatus.testing,
-     "description": "洛克王国IP开放世界新作", "priority_weight": 3},
+     "description": "洛克王国IP开放世界新作"},
     {"name": "崩坏：星穹铁道", "genre": GameGenre.rpg, "publisher": "米哈游", "status": GameStatus.operating,
      "description": "银河冒险RPG"},
     {"name": "永劫无间手游", "genre": GameGenre.battle_royale, "publisher": "网易", "status": GameStatus.operating,
@@ -130,7 +145,7 @@ def _generate_mock_contents(game_name: str) -> list[dict]:
             "like_count": likes,
             "comment_count": comments,
             "share_count": max(1, int(likes * 0.15)),
-            "hot_score": compute_content_hot_score(views, likes, comments, max(1, int(likes * 0.15))),
+            "hot_score": min(100.0, (views / 2000) + (likes * 0.01)),
             "published_at": now - jitter,
             "url": f"https://{platform.lower()}.example.com/post/{uuid.uuid4().hex[:8]}",
             "extra_data": json.dumps({"top_comments": [f"我也想知道{i}" for i in range(3)]}, ensure_ascii=False),
@@ -181,23 +196,6 @@ def _first_text(*values) -> str:
         if text:
             return text
     return ""
-
-
-def _first_int(*values) -> int:
-    for value in values:
-        if value is None:
-            continue
-        if isinstance(value, bool):
-            continue
-        if isinstance(value, (int, float)):
-            return max(0, int(value))
-        try:
-            text = str(value).strip().replace(",", "")
-            if text:
-                return max(0, int(float(text)))
-        except (TypeError, ValueError):
-            continue
-    return 0
 
 
 def _extract_query_param(url: str, name: str) -> str:
@@ -391,7 +389,6 @@ class DataAdapter:
             game = Game(
                 id=str(uuid.uuid4()), name=g["name"], genre=g["genre"],
                 publisher=g["publisher"], status=g["status"], description=g["description"],
-                priority_weight=g.get("priority_weight", default_priority_weight(g["name"])),
             )
             self.session.add(game)
             games.append(game)
@@ -408,7 +405,8 @@ class DataAdapter:
             return False
 
     async def _call_monitor(
-        self, platform_key: str, keyword: str, count: int = 50, proxy_url: str | None = None,
+        self, platform_key: str, keyword: str, count: int = 50,
+        proxy_url: str | None = None, proxy_mode: str = "auto",
     ) -> list[dict]:
         """调用监控服务采集指定平台数据（支持多排序序列去重）。"""
         self._last_monitor_errors = []
@@ -426,8 +424,8 @@ class DataAdapter:
             ]
         elif platform_key == "taptap":
             sort_configs = [
-                {"keyword": keyword, "count": count, "sort": "default", "proxy_url": proxy_url},
-                {"keyword": keyword, "count": count, "sort": "update_time,desc", "proxy_url": proxy_url},
+                {"keyword": keyword, "count": count, "sort": "default"},
+                {"keyword": keyword, "count": count, "sort": "update_time,desc"},
             ]
         elif platform_key == "douyin":
             sort_configs = [
@@ -441,12 +439,18 @@ class DataAdapter:
         all_items: list[dict] = []
         errors: list[str] = []
         url = f"{settings.monitor_api_base}{endpoint}"
+        taptap_proxy_url = proxy_url if platform_key == "taptap" and proxy_url else None
+        taptap_use_proxy = bool(taptap_proxy_url and proxy_mode == "proxy")
+        taptap_allow_fallback = bool(taptap_proxy_url and proxy_mode == "auto")
 
         for payload in sort_configs:
             sort_label = payload.get("sort", "default")
+            request_payload = dict(payload)
+            if platform_key == "taptap":
+                request_payload["proxy_url"] = taptap_proxy_url if taptap_use_proxy else None
             try:
                 async with httpx.AsyncClient(timeout=120.0) as client:
-                    resp = await client.post(url, json=payload)
+                    resp = await client.post(url, json=request_payload)
                     resp.raise_for_status()
                     data = resp.json()
                     items = data.get("items", [])
@@ -454,6 +458,43 @@ class DataAdapter:
                     all_items.extend(items)
             except httpx.HTTPStatusError as e:
                 detail = _extract_monitor_error(e.response)
+                if (
+                    platform_key == "taptap"
+                    and taptap_allow_fallback
+                    and not taptap_use_proxy
+                    and _is_taptap_risk_control(e.response.status_code, detail)
+                ):
+                    logger.warning(
+                        f"[Monitor] taptap '{keyword}' sort={sort_label} 直连触发风控，切换代理重试"
+                    )
+                    taptap_use_proxy = True
+                    retry_payload = dict(payload)
+                    retry_payload["proxy_url"] = taptap_proxy_url
+                    try:
+                        async with httpx.AsyncClient(timeout=120.0) as client:
+                            retry_resp = await client.post(url, json=retry_payload)
+                            retry_resp.raise_for_status()
+                            data = retry_resp.json()
+                            items = data.get("items", [])
+                            logger.info(
+                                f"[Monitor] taptap '{keyword}' sort={sort_label} proxy → {len(items)}条"
+                            )
+                            all_items.extend(items)
+                            continue
+                    except httpx.HTTPStatusError as retry_error:
+                        retry_detail = _extract_monitor_error(retry_error.response)
+                        msg = (
+                            f"sort={sort_label} proxy HTTP {retry_error.response.status_code}: "
+                            f"{retry_detail}"
+                        )
+                        errors.append(msg)
+                        logger.warning(f"[Monitor] {platform_key} {msg}")
+                        continue
+                    except Exception as retry_error:
+                        msg = f"sort={sort_label} proxy: {retry_error}"
+                        errors.append(msg)
+                        logger.warning(f"[Monitor] {platform_key} 调用失败: {msg}")
+                        continue
                 msg = f"sort={sort_label} HTTP {e.response.status_code}: {detail}"
                 errors.append(msg)
                 logger.warning(f"[Monitor] {platform_key} {msg}")
@@ -503,7 +544,7 @@ class DataAdapter:
             create_at = item.get("create_at", 0)
             pub_time = datetime.fromtimestamp(create_at) if create_at else now
             view_count = 0
-            comment_count = _first_int(item.get("comment_num"), item.get("comment_count"), item.get("comments"))
+            comment_count = 0
         elif platform_key == "taptap":
             title = item.get("title", "")
             body = item.get("summary", "")
@@ -513,7 +554,7 @@ class DataAdapter:
             moment_id = item.get("id_str", "")
             url = f"https://www.taptap.cn/moment/{moment_id}" if moment_id else ""
             view_count = 0
-            comment_count = _first_int(item.get("comments"), item.get("comment_count"), item.get("reply_count"))
+            comment_count = 0
         elif platform_key == "douyin":
             title = item.get("video_desc", "")
             body = item.get("video_desc", "")
@@ -525,17 +566,17 @@ class DataAdapter:
             except (ValueError, TypeError):
                 pub_time = now
             view_count = 0
-            comment_count = _first_int(item.get("comment_count"), item.get("comment_num"), item.get("comments"))
+            comment_count = 0
         else:
             title = item.get("title", "")
             body = item.get("body", item.get("description", ""))
             url = item.get("url", item.get("share_url", item.get("video_url", "")))
             pub_time = now
-            view_count = _first_int(item.get("view_count"), item.get("views"), item.get("play_count"))
-            like_count = _first_int(item.get("like_count"), item.get("likes"), item.get("thumbs"))
-            comment_count = _first_int(item.get("comment_count"), item.get("comment_num"), item.get("comments"))
+            view_count = 0
+            like_count = 0
+            comment_count = 0
 
-        hot_score = compute_content_hot_score(view_count, like_count, comment_count, 0)
+        hot_score = min(100.0, (like_count * 0.5) + (view_count / 2000))
 
         return {
             "platform": platform_label,
@@ -749,7 +790,7 @@ class DataAdapter:
 
     async def _ingest_single_combo(
         self, platform_key: str, keyword: str, crawl_count: int,
-        config: PlatformSearchConfig, games: dict,
+        config: PlatformSearchConfig, games: dict, proxy_mode: str = "auto",
     ) -> int:
         """采集单个 (平台, 关键词) 组合并入库，返回入库条数。"""
         proxy_url = getattr(config, "proxy_url", None) or None
@@ -758,7 +799,9 @@ class DataAdapter:
 
         try:
             # 1. 调用监控采集
-            items = await self._call_monitor(platform_key, keyword, crawl_count, proxy_url)
+            items = await self._call_monitor(
+                platform_key, keyword, crawl_count, proxy_url, proxy_mode=proxy_mode
+            )
             fetched = len(items)
 
             if not items:
@@ -848,7 +891,7 @@ class DataAdapter:
             return count
 
         # 获取游戏信息
-        stmt = select(Game).where(Game.id.in_(game_ids)).order_by(Game.priority_weight.desc(), Game.name)
+        stmt = select(Game).where(Game.id.in_(game_ids))
         result = await self.session.execute(stmt)
         games = {g.id: g for g in result.scalars().all()}
 
@@ -914,13 +957,13 @@ class DataAdapter:
 
     async def ingest_single(
         self, platform_key: str, keyword: str, game_ids: list[str],
-        crawl_count: int = 50,
+        crawl_count: int = 50, proxy_mode: str = "auto",
     ) -> dict:
         """手动重试单个 (平台, 关键词) 组合的采集。"""
         if self.use_mock:
             return {"ok": False, "error": "Mock 模式下不支持重试"}
 
-        stmt = select(Game).where(Game.id.in_(game_ids)).order_by(Game.priority_weight.desc(), Game.name)
+        stmt = select(Game).where(Game.id.in_(game_ids))
         result = await self.session.execute(stmt)
         games = {g.id: g for g in result.scalars().all()}
 
@@ -939,9 +982,19 @@ class DataAdapter:
                 crawl_count=crawl_count,
                 enabled=True,
             )
+        if platform_key == "taptap" and proxy_mode == "proxy" and not getattr(config, "proxy_url", None):
+            raise MonitorCrawlError("TapTap 未配置代理地址，请先在搜索词配置中填写代理。")
 
-        count = await self._ingest_single_combo(platform_key, keyword, crawl_count, config, games)
-        return {"ok": True, "platform": platform_key, "keyword": keyword, "ingested": count}
+        count = await self._ingest_single_combo(
+            platform_key, keyword, crawl_count, config, games, proxy_mode=proxy_mode
+        )
+        return {
+            "ok": True,
+            "platform": platform_key,
+            "keyword": keyword,
+            "ingested": count,
+            "proxy_mode": proxy_mode,
+        }
 
     async def get_progress(self) -> list[dict]:
         """获取当前采集进度（所有组合的状态）。"""
@@ -988,7 +1041,7 @@ class DataAdapter:
         self, game_ids: list[str], since: datetime | None = None,
     ) -> list[dict]:
         """兼容旧接口：一次性全部采集（不含断点续传）。"""
-        stmt = select(Game).where(Game.id.in_(game_ids)).order_by(Game.priority_weight.desc(), Game.name)
+        stmt = select(Game).where(Game.id.in_(game_ids))
         result = await self.session.execute(stmt)
         games = {g.id: g for g in result.scalars().all()}
 

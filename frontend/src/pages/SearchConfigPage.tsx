@@ -14,11 +14,13 @@ export default function SearchConfigPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editKeywords, setEditKeywords] = useState("")
   const [editCrawlCount, setEditCrawlCount] = useState(50)
+  const [editProxyUrl, setEditProxyUrl] = useState("")
   const [error, setError] = useState("")
   const [showAddForm, setShowAddForm] = useState(false)
   const [newPlatform, setNewPlatform] = useState("")
   const [newKeywords, setNewKeywords] = useState("")
   const [newCrawlCount, setNewCrawlCount] = useState(50)
+  const [newProxyUrl, setNewProxyUrl] = useState("")
 
   const fetchAll = async () => {
     setLoading(true)
@@ -49,6 +51,7 @@ export default function SearchConfigPage() {
     setEditingId(cfg.id)
     setEditKeywords(cfg.keywords)
     setEditCrawlCount(cfg.crawl_count || 50)
+    setEditProxyUrl(cfg.proxy_url || "")
     setError("")
   }
 
@@ -56,6 +59,7 @@ export default function SearchConfigPage() {
     setEditingId(null)
     setEditKeywords("")
     setEditCrawlCount(50)
+    setEditProxyUrl("")
     setError("")
   }
 
@@ -63,9 +67,14 @@ export default function SearchConfigPage() {
     if (!editKeywords.trim()) { setError("关键词不能为空"); return }
     setSaving(true)
     try {
-      await api.updateSearchConfig(cfg.id, { keywords: editKeywords, crawl_count: editCrawlCount })
+      await api.updateSearchConfig(cfg.id, {
+        keywords: editKeywords,
+        crawl_count: editCrawlCount,
+        ...(isTapTapPlatform(cfg.platform) ? { proxy_url: editProxyUrl.trim() } : {}),
+      })
       setEditingId(null)
       setEditKeywords("")
+      setEditProxyUrl("")
       fetchAll()
     } catch (e: any) {
       setError(e?.message || "保存失败")
@@ -93,11 +102,13 @@ export default function SearchConfigPage() {
         platform: newPlatform,
         keywords: newKeywords,
         crawl_count: newCrawlCount,
+        proxy_url: newPlatform === "taptap" ? newProxyUrl.trim() : null,
       })
       setShowAddForm(false)
       setNewPlatform("")
       setNewKeywords("")
       setNewCrawlCount(50)
+      setNewProxyUrl("")
       setError("")
       fetchAll()
     } catch (e: any) {
@@ -111,6 +122,7 @@ export default function SearchConfigPage() {
   const availablePlatforms = platforms.filter(p => !usedPlatforms.has(p.key))
   const getPlatformLabel = (key: string) => platforms.find(p => p.key === key)?.label || key
   const enabledCount = configs.filter(c => c.enabled).length
+  const isTapTapPlatform = (platform: string) => platform.trim().toLowerCase() === "taptap"
 
   if (loading) {
     return (
@@ -172,7 +184,10 @@ export default function SearchConfigPage() {
               <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>平台</label>
               <select
                 value={newPlatform}
-                onChange={(e) => setNewPlatform(e.target.value)}
+                onChange={(e) => {
+                  setNewPlatform(e.target.value)
+                  if (e.target.value !== "taptap") setNewProxyUrl("")
+                }}
                 className="form-input"
                 style={{ fontSize: 13, padding: "6px 28px 6px 10px", width: 140 }}
               >
@@ -206,11 +221,24 @@ export default function SearchConfigPage() {
                 style={{ width: "100%", fontSize: 13, padding: "6px 8px" }}
               />
             </div>
+            {isTapTapPlatform(newPlatform) && (
+              <div style={{ flex: "1 1 260px", minWidth: 260 }}>
+                <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>代理地址（仅用于 TapTap）</label>
+                <input
+                  type="text"
+                  value={newProxyUrl}
+                  onChange={(e) => setNewProxyUrl(e.target.value)}
+                  placeholder="例如：http://127.0.0.1:7897"
+                  className="form-input"
+                  style={{ width: "100%", fontSize: 13, padding: "6px 10px" }}
+                />
+              </div>
+            )}
             <button className="btn btn-primary" onClick={addConfig} disabled={saving} style={{ fontSize: 12, padding: "6px 16px" }}>
               {saving ? <Loader2 className="spinner" size={14} /> : <Check size={14} />}
               确认添加
             </button>
-            <button className="btn btn-ghost" onClick={() => { setShowAddForm(false); setNewCrawlCount(50); setError("") }} style={{ fontSize: 12, padding: "6px 12px" }}>
+            <button className="btn btn-ghost" onClick={() => { setShowAddForm(false); setNewPlatform(""); setNewCrawlCount(50); setNewProxyUrl(""); setError("") }} style={{ fontSize: 12, padding: "6px 12px" }}>
               <X size={14} /> 取消
             </button>
           </div>
@@ -245,12 +273,13 @@ export default function SearchConfigPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th style={{ width: "14%" }}>平台</th>
-                <th style={{ width: "40%" }}>搜索关键词</th>
+                <th style={{ width: "12%" }}>平台</th>
+                <th style={{ width: "34%" }}>搜索关键词</th>
                 <th style={{ width: "10%", textAlign: "center" }}>抓取条数</th>
+                <th style={{ width: "14%" }}>代理配置</th>
                 <th style={{ width: "10%", textAlign: "center" }}>状态</th>
-                <th style={{ width: "14%", textAlign: "center" }}>更新时间</th>
-                <th style={{ width: "12%", textAlign: "center" }}>操作</th>
+                <th style={{ width: "10%", textAlign: "center" }}>更新时间</th>
+                <th style={{ width: "10%", textAlign: "center" }}>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -328,6 +357,37 @@ export default function SearchConfigPage() {
                         {cfg.crawl_count || 50}条
                       </span>
                     </td>
+                    <td>
+                      {isTapTapPlatform(cfg.platform) ? (
+                        isEditing ? (
+                          <input
+                            type="text"
+                            value={editProxyUrl}
+                            onChange={(e) => setEditProxyUrl(e.target.value)}
+                            placeholder="http://127.0.0.1:7897"
+                            className="form-input"
+                            style={{ width: "100%", minWidth: 150, fontSize: 12, padding: "5px 8px" }}
+                          />
+                        ) : (
+                          <span
+                            title={cfg.proxy_url || "未配置代理"}
+                            style={{
+                              display: "inline-block",
+                              maxWidth: 180,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              color: cfg.proxy_url ? "var(--text-secondary)" : "var(--text-muted)",
+                              fontSize: 12,
+                            }}
+                          >
+                            {cfg.proxy_url || "未配置"}
+                          </span>
+                        )
+                      ) : (
+                        <span style={{ color: "var(--text-muted)", fontSize: 12 }}>仅 TapTap 使用</span>
+                      )}
+                    </td>
                     <td style={{ textAlign: "center" }}>
                       <button
                         onClick={() => toggleEnabled(cfg)}
@@ -350,7 +410,7 @@ export default function SearchConfigPage() {
                         {!isEditing && (
                           <button onClick={() => startEdit(cfg)}
                             style={{ padding: "4px 8px", border: "none", borderRadius: 4, cursor: "pointer", background: "var(--primary-light)", color: "var(--primary)" }}
-                            title="编辑关键词和抓取条数"
+                            title="编辑关键词、抓取条数和 TapTap 代理"
                           >
                             <Edit2 size={14} />
                           </button>
@@ -382,6 +442,7 @@ export default function SearchConfigPage() {
         搜索词为全局配置，自动应用于游戏管理列表中的所有活跃游戏。
         例如在「抖音」配置「配装计算器, 战备阈值」，设置抓取条数 100 后，管线会对所有活跃游戏抓取抖音上最近 100 条相关视频/帖子，纳入信号计算。
         每个平台只需配置一次，关键词用逗号分隔。抓取条数范围 10-1000 条，建议 50-200 条。
+        代理地址仅用于 TapTap：自动抓取会先直连，遇到 TapTap 风控 405 后再切换代理。
       </div>
     </div>
   )

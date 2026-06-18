@@ -51,6 +51,7 @@ class RetryRequest(BaseModel):
     platform: str
     keyword: str
     crawl_count: int = 50
+    proxy_mode: str = "auto"
 
 
 @router.get("/crawl/progress")
@@ -95,8 +96,17 @@ async def retry_crawl(req: RetryRequest):
         if not game_ids:
             raise HTTPException(status_code=400, detail="无活跃游戏")
 
+        if req.proxy_mode not in {"auto", "none", "proxy"}:
+            raise HTTPException(status_code=400, detail="proxy_mode 仅支持 auto/none/proxy")
+
         try:
-            r = await adapter.ingest_single(req.platform, req.keyword, game_ids, req.crawl_count)
+            r = await adapter.ingest_single(
+                req.platform,
+                req.keyword,
+                game_ids,
+                req.crawl_count,
+                proxy_mode=req.proxy_mode,
+            )
             return r
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"重试失败: {e}")

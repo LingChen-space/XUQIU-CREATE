@@ -75,6 +75,7 @@ async def create_config(
         keywords=payload.keywords,
         enabled=payload.enabled,
         crawl_count=payload.crawl_count,
+        proxy_url=payload.proxy_url or None,
     )
     db.add(cfg)
     await db.commit()

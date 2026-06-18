@@ -43,9 +43,9 @@ export const api = {
   // 搜索词配置
   getSearchConfigPlatforms: () => request<any[]>('/search-configs/platforms'),
   getSearchConfigs: () => request<any[]>('/search-configs'),
-  createSearchConfig: (data: { platform: string; keywords: string; enabled?: boolean; crawl_count?: number }) =>
+  createSearchConfig: (data: { platform: string; keywords: string; enabled?: boolean; crawl_count?: number; proxy_url?: string | null }) =>
     request<any>('/search-configs', { method: 'POST', body: JSON.stringify(data) }),
-  updateSearchConfig: (configId: string, data: { keywords?: string; enabled?: boolean; crawl_count?: number }) =>
+  updateSearchConfig: (configId: string, data: { keywords?: string; enabled?: boolean; crawl_count?: number; proxy_url?: string | null }) =>
     request<any>(`/search-configs/${configId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteSearchConfig: (configId: string) =>
     request<any>(`/search-configs/${configId}`, { method: 'DELETE' }),
@@ -58,10 +58,10 @@ export const api = {
 
   // 采集进度
   getCrawlProgress: () => request<CrawlProgress>('/monitor/crawl/progress'),
-  retryCrawl: (platform: string, keyword: string, crawlCount = 50) =>
+  retryCrawl: (platform: string, keyword: string, crawlCount = 50, proxyMode: "auto" | "none" | "proxy" = "auto") =>
     request<any>('/monitor/crawl/retry', {
       method: 'POST',
-      body: JSON.stringify({ platform, keyword, crawl_count: crawlCount }),
+      body: JSON.stringify({ platform, keyword, crawl_count: crawlCount, proxy_mode: proxyMode }),
     }),
   startDouyinLogin: () => request<any>('/monitor/douyin/login', { method: 'POST' }),
   getDouyinLoginStatus: () => request<any>('/monitor/douyin/login'),
