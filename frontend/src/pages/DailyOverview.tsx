@@ -67,38 +67,9 @@ const getProgressDetailTitle = (record: CrawlProgressRecord) => {
   return [detail.summary, ...reasons].filter(Boolean).join("\n")
 }
 
-const getPlatformColor = (platform: string) => {
-  const normalized = platform.trim().toLowerCase()
-  return PLATFORM_COLORS[platform] || PLATFORM_COLORS[normalized] || {
-    ...DEFAULT_PLATFORM_COLOR,
-    label: platform || DEFAULT_PLATFORM_COLOR.label,
-  }
-}
-
-const isDouyinProgressRecord = (record: CrawlProgressRecord) => {
-  const platform = record.platform.trim().toLowerCase()
-  return platform === "douyin" || record.platform === "抖音"
-}
-
 const isTapTapProgressRecord = (record: CrawlProgressRecord) => {
   const platform = record.platform.trim().toLowerCase()
   return platform === "taptap"
-}
-
-const getProgressDetailText = (record: CrawlProgressRecord) => {
-  const detail = record.result_detail
-  if (!detail) return ""
-  if (record.status !== "failed" && detail.shortfall_count <= 0 && detail.reasons.length === 0) return ""
-  return detail.summary
-}
-
-const getProgressDetailTitle = (record: CrawlProgressRecord) => {
-  const detail = record.result_detail
-  if (!detail) return ""
-  const reasons = detail.reasons
-    .filter((r) => r.count > 0 || r.detail)
-    .map((r) => `${r.label}${r.count > 0 ? `${r.count}条` : ""}${r.detail ? `：${r.detail}` : ""}`)
-  return [detail.summary, ...reasons].filter(Boolean).join("\n")
 }
 
 interface Props {
@@ -185,17 +156,9 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
   }
 
   const triggerPipeline = async (forceRecrawl = false) => {
-  const triggerPipeline = async (forceRecrawl = false) => {
     setPipelineLoading(true)
     setCrawlNotice(null)
-    setCrawlNotice(null)
     try {
-      const result = await api.triggerPipeline({ force_recrawl: forceRecrawl })
-      if (forceRecrawl) {
-        setCrawlNotice("已忽略今日完成状态并重新抓取，入库仍会自动去重。")
-      } else if (result.ingest?.status === "skipped_completed") {
-        setCrawlNotice(result.ingest.message || "今日所有平台关键词组合均已完成采集，本次无需重新抓取。")
-      }
       const result = await api.triggerPipeline({ force_recrawl: forceRecrawl })
       if (forceRecrawl) {
         setCrawlNotice("已忽略今日完成状态并重新抓取，入库仍会自动去重。")
@@ -325,22 +288,11 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
           <button
             className="btn btn-primary"
             onClick={() => triggerPipeline()}
-            onClick={() => triggerPipeline()}
             disabled={pipelineLoading}
             style={{ width: "100%", justifyContent: "center", padding: "12px 0", fontSize: 14 }}
           >
             {pipelineLoading ? <Loader2 className="spinner" size={16} /> : <RefreshCw size={16} />}
             {pipelineLoading ? "分析中..." : "立即分析"}
-          </button>
-          <button
-            className="btn btn-outline"
-            onClick={() => triggerPipeline(true)}
-            disabled={pipelineLoading}
-            title="忽略今日已完成状态，从头重新抓取；入库仍自动去重"
-            style={{ width: "100%", justifyContent: "center", padding: "10px 0", fontSize: 13, marginTop: 8 }}
-          >
-            {pipelineLoading ? <Loader2 className="spinner" size={15} /> : <RotateCw size={15} />}
-            强制重新抓取
           </button>
           <button
             className="btn btn-outline"
@@ -849,7 +801,6 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
               <div className="empty-icon"><RefreshCw size={24} /></div>
               <p style={{ fontWeight: 500, marginBottom: 6 }}>暂无需求数据</p>
               <p style={{ fontSize: 13, marginBottom: 20 }}>点击上方「立即分析」按钮，或等待每日凌晨 6:00 自动执行分析管线。</p>
-              <button className="btn btn-primary" onClick={() => triggerPipeline()} disabled={pipelineLoading}>
               <button className="btn btn-primary" onClick={() => triggerPipeline()} disabled={pipelineLoading}>
                 {pipelineLoading ? <Loader2 className="spinner" size={16} /> : <RefreshCw size={16} />}
                 运行首次分析
