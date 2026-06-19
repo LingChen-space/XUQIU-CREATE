@@ -185,7 +185,7 @@ GAME_DOMAIN_THEME_RULES: tuple[tuple[tuple[str, ...], tuple[DemandThemeRule, ...
         ),
     ),
     (
-        ("三角洲行动", "三角洲行动体验服"),
+        ("三角洲行动", "三角洲", "三角洲行动体验服", "三角洲体验服", "三角洲S10体验服"),
         (
             DemandThemeRule(
                 key="delta_map",
@@ -277,7 +277,7 @@ GAME_DOMAIN_THEME_RULES: tuple[tuple[tuple[str, ...], tuple[DemandThemeRule, ...
         ),
     ),
     (
-        ("CF手游体验服", "穿越火线手游体验服"),
+        ("CF手游", "CF手游体验服", "穿越火线手游", "穿越火线手游体验服", "枪战王者"),
         (
             DemandThemeRule(
                 key="cf_setup",
@@ -367,7 +367,17 @@ GAME_DOMAIN_THEME_RULES: tuple[tuple[tuple[str, ...], tuple[DemandThemeRule, ...
 )
 
 
-KNOWN_GAME_ALIAS_GROUPS: tuple[tuple[str, ...], ...] = tuple(aliases for aliases, _ in GAME_DOMAIN_THEME_RULES)
+EXTRA_KNOWN_GAME_ALIAS_GROUPS: tuple[tuple[str, ...], ...] = (
+    ("和平精英", "和平精英体验服", "和平地铁", "地铁逃生"),
+    ("绝区零", "ZenlessZoneZero"),
+    ("迷你世界",),
+    ("太吾绘卷", "太吾村"),
+)
+KNOWN_GAME_ALIAS_GROUPS: tuple[tuple[str, ...], ...] = (
+    *(aliases for aliases, _ in GAME_DOMAIN_THEME_RULES),
+    *EXTRA_KNOWN_GAME_ALIAS_GROUPS,
+)
+EXPERIENCE_SERVER_MARKERS = ("体验服", "测试服", "先遣服")
 
 
 def _normalize_game_name(name: str) -> str:
@@ -393,11 +403,35 @@ def _alias_group_for_game(game_name: str) -> tuple[str, ...]:
     return (game_name,)
 
 
+def _has_experience_marker(text: str) -> bool:
+    normalized = _normalize_game_name(text)
+    return any(_normalize_game_name(marker) in normalized for marker in EXPERIENCE_SERVER_MARKERS)
+
+
+def _is_experience_server_game(game_name: str) -> bool:
+    return _has_experience_marker(game_name)
+
+
+def _mentions_current_experience_game(game_name: str, text: str) -> bool:
+    current_aliases = tuple(_normalize_game_name(alias) for alias in _alias_group_for_game(game_name))
+    experience_aliases = tuple(alias for alias in current_aliases if _has_experience_marker(alias))
+    base_aliases = tuple(alias for alias in current_aliases if alias and not _has_experience_marker(alias))
+    text_has_marker = any(_normalize_game_name(marker) in text for marker in EXPERIENCE_SERVER_MARKERS)
+
+    return (
+        any(alias and alias in text for alias in experience_aliases)
+        or (text_has_marker and any(alias and alias in text for alias in base_aliases))
+    )
+
+
 def _content_belongs_to_game(game_name: str, title: str, body: str) -> bool:
     """跳过明显串到其他游戏名下的内容，避免跨游戏关键词污染。"""
     text = _normalize_game_name(f"{title} {body}")
     current_aliases = tuple(_normalize_game_name(alias) for alias in _alias_group_for_game(game_name))
     mentions_current = any(alias and alias in text for alias in current_aliases)
+
+    if _is_experience_server_game(game_name):
+        return _mentions_current_experience_game(game_name, text)
 
     mentions_other = False
     for aliases in KNOWN_GAME_ALIAS_GROUPS:
@@ -443,6 +477,18 @@ def _dedupe_overlapping_theme_analyses(analyses: list[dict]) -> list[dict]:
             deduped.append(item)
 
     return sorted(deduped, key=lambda value: value["potential_score"], reverse=True)
+
+
+def _evidence_ids_for_analysis(game: Game, analysis: dict, evidence_posts: list[PlatformContent]) -> list[str]:
+    explicit_ids = analysis.get("evidence_post_ids")
+    if explicit_ids is not None:
+        return list(explicit_ids)
+
+    return [
+        post.id
+        for post in evidence_posts
+        if _content_belongs_to_game(game.name, post.title or "", post.body or "")
+    ]
 
 
 class LLMPipeline:
@@ -819,7 +865,7 @@ class LLMPipeline:
                     )
                     self.session.add(demand)
 
-                evidence_ids = analysis.get("evidence_post_ids") or [p.id for p in evidence_posts]
+                evidence_ids = _evidence_ids_for_analysis(game, analysis, evidence_posts)
                 demand.tool_type = tool_type
                 demand.title = title
                 demand.description = analysis.get("tool_description", "")

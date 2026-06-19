@@ -56,8 +56,8 @@ class DemandThemeAnalysisTest(unittest.TestCase):
             SimpleNamespace(name="三角洲行动体验服", priority_weight=3),
             [
                 content("三角洲行动体验服新地图核电站点位整理", "资源点和路线都变了", 220, 130, 16000, "a"),
-                content("核电站地图太复杂了，撤离路线怎么走", "求交互地图标点", 160, 88, 11000, "b"),
-                content("体验服核电站资源点位置汇总", "出生点和撤离点需要标记", 100, 62, 8000, "c"),
+                content("三角洲体验服核电站地图太复杂了，撤离路线怎么走", "求交互地图标点", 160, 88, 11000, "b"),
+                content("三角洲行动体验服核电站资源点位置汇总", "出生点和撤离点需要标记", 100, 62, 8000, "c"),
             ],
             {},
         )
@@ -83,7 +83,7 @@ class DemandThemeAnalysisTest(unittest.TestCase):
     def test_game_analysis_can_return_multiple_theme_demands(self):
         async def get_contents(game_id, window_date, limit=None):
             return [
-                content("三角洲行动卡战备怎么搞", "配装和战备值看不懂", 150, 80, 10000, "a"),
+                content("三角洲行动体验服卡战备怎么搞", "配装和战备值看不懂", 150, 80, 10000, "a"),
                 content("三角洲行动体验服核电站地图点位", "资源点和撤离路线汇总", 170, 95, 12000, "b"),
             ]
 
@@ -200,6 +200,58 @@ class DemandThemeAnalysisTest(unittest.TestCase):
         map_demands = [a for a in analyses if a["tool_type_suggestion"] == "交互地图"]
         self.assertEqual(1, len(map_demands))
         self.assertEqual("genshin_map", map_demands[0]["theme_key"])
+
+    def test_experience_server_requires_current_game_evidence(self):
+        analyses = self.pipeline._theme_analysis_from_contents(
+            SimpleNamespace(name="CF手游体验服", priority_weight=1),
+            [
+                content("CF手游体验服灵敏度压枪参数", "准星、陀螺仪和枪械配置求推荐", 120, 48, 8000, "cf"),
+                content("下载和平精英体验服", "和平精英体验服下载教程", 180, 60, 10000, "peace"),
+                content("三角洲体验服免费下载安装教程", "三角洲体验服下载资格入口", 160, 55, 9000, "delta"),
+                content("麻瓜图书管理员帮助工具", "书架位置和地图工具", 130, 40, 7000, "generic"),
+            ],
+            {},
+        )
+
+        evidence_ids = {post_id for item in analyses for post_id in item["evidence_post_ids"]}
+        self.assertIn("cf", evidence_ids)
+        self.assertNotIn("peace", evidence_ids)
+        self.assertNotIn("delta", evidence_ids)
+        self.assertNotIn("generic", evidence_ids)
+
+    def test_experience_server_rejects_base_game_posts_without_experience_marker(self):
+        analyses = self.pipeline._theme_analysis_from_contents(
+            SimpleNamespace(name="三角洲行动体验服", priority_weight=3),
+            [
+                content("三角洲行动体验服新地图核电站点位整理", "资源点和路线都变了", 220, 130, 16000, "exp"),
+                content("三角洲行动倒子弹路线攻略", "大坝跑刀摸金路线", 180, 80, 12000, "base"),
+                content("洛克王国地图资源查询器", "洛克王国世界跑图工具", 150, 70, 10000, "locke"),
+                content("真萌新推荐", "工具多到你无法想象", 120, 45, 7000, "generic"),
+            ],
+            {},
+        )
+
+        evidence_ids = {post_id for item in analyses for post_id in item["evidence_post_ids"]}
+        self.assertIn("exp", evidence_ids)
+        self.assertNotIn("base", evidence_ids)
+        self.assertNotIn("locke", evidence_ids)
+        self.assertNotIn("generic", evidence_ids)
+
+    def test_fallback_evidence_ids_are_filtered_by_experience_server_game(self):
+        from app.services.llm_pipeline import _evidence_ids_for_analysis
+
+        evidence_ids = _evidence_ids_for_analysis(
+            SimpleNamespace(name="三角洲行动体验服"),
+            {"tool_title": "三角洲行动体验服交互地图（待确认）"},
+            [
+                content("三角洲行动体验服新地图核电站点位整理", "资源点和路线都变了", content_id="exp"),
+                content("三角洲行动倒子弹路线攻略", "普通服跑刀摸金路线", content_id="base"),
+                content("洛克王国地图资源查询器", "洛克王国世界跑图工具", content_id="locke"),
+                content("真萌新推荐", "工具多到你无法想象", content_id="generic"),
+            ],
+        )
+
+        self.assertEqual(["exp"], evidence_ids)
 
 
 if __name__ == "__main__":
