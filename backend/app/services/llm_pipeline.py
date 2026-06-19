@@ -136,7 +136,313 @@ DEMAND_THEME_RULES = (
         title_keywords=("攻略", "教程", "打法", "阵容"),
         feasibility=3,
     ),
+    DemandThemeRule(
+        key="database",
+        tool_type="数据库",
+        title_label="资料数据库",
+        description_label="角色、装备、图鉴、掉落、行情和属性资料",
+        keywords=("数据库", "图鉴", "百科", "资料", "属性", "掉落", "物价", "行情", "价格", "查询"),
+        title_keywords=("图鉴", "数据库", "物价", "行情", "资料"),
+        feasibility=4,
+    ),
 )
+
+
+GENERIC_THEME_KEYS = frozenset(rule.key for rule in DEMAND_THEME_RULES)
+
+
+GAME_DOMAIN_THEME_RULES: tuple[tuple[tuple[str, ...], tuple[DemandThemeRule, ...]], ...] = (
+    (
+        ("洛克王国世界", "洛克王国：世界"),
+        (
+            DemandThemeRule(
+                key="locke_breeding",
+                tool_type="机制计算器",
+                title_label="孵蛋配方计算器",
+                description_label="孵蛋配方、蛋组、配种、性格和进化规则",
+                keywords=("孵蛋", "配方", "配种", "蛋组", "孵化", "性格", "天赋", "进化", "亲密度"),
+                title_keywords=("孵蛋", "配方", "蛋组", "配种"),
+                feasibility=5,
+            ),
+            DemandThemeRule(
+                key="locke_database",
+                tool_type="数据库",
+                title_label="精灵图鉴数据库",
+                description_label="精灵、宠物、技能表、属性克制和种族值资料",
+                keywords=("精灵", "宠物", "图鉴", "技能表", "属性克制", "种族值", "捕捉", "捕捉地点"),
+                title_keywords=("精灵", "宠物", "图鉴", "捕捉地点"),
+                feasibility=4,
+            ),
+            DemandThemeRule(
+                key="locke_map",
+                tool_type="交互地图",
+                title_label="捕捉地点地图",
+                description_label="捕捉地点、刷新点、分布位置和跑图路线",
+                keywords=("捕捉地点", "刷新点", "分布", "跑图", "地图工具", "位置"),
+                title_keywords=("捕捉地点", "刷新点", "跑图", "地图"),
+                feasibility=4,
+            ),
+        ),
+    ),
+    (
+        ("三角洲行动", "三角洲行动体验服"),
+        (
+            DemandThemeRule(
+                key="delta_map",
+                tool_type="交互地图",
+                title_label="地图/撤离点工具",
+                description_label="撤离点、资源点、出生点、保险箱和地图路线",
+                keywords=("撤离点", "撤离路线", "资源点", "出生点", "保险箱", "物资点", "航天基地", "零号大坝", "长弓溪谷", "巴克什", "潮汐监狱", "核电站"),
+                title_keywords=("核电站", "撤离点", "航天基地", "零号大坝", "长弓溪谷"),
+                feasibility=4,
+            ),
+            DemandThemeRule(
+                key="delta_loadout",
+                tool_type="配装/战备工具",
+                title_label="战备/改枪工具",
+                description_label="战备值、改枪、配件、武器方案和物资价格",
+                keywords=("卡战备", "战备值", "改枪", "配件", "枪械", "子弹", "护甲", "物资价格", "行情"),
+                title_keywords=("卡战备", "战备值", "改枪", "配件"),
+                feasibility=4,
+            ),
+        ),
+    ),
+    (
+        ("原神",),
+        (
+            DemandThemeRule(
+                key="genshin_map",
+                tool_type="交互地图",
+                title_label="资源收集地图",
+                description_label="神瞳、宝箱、采集路线、地灵龛和资源全收集",
+                keywords=("神瞳", "宝箱", "采集路线", "收集路线", "资源全收集", "地灵龛", "锚点", "特产", "隐藏宝箱"),
+                title_keywords=("神瞳", "宝箱", "资源全收集", "采集路线"),
+                feasibility=4,
+            ),
+            DemandThemeRule(
+                key="genshin_build",
+                tool_type="配装/战备工具",
+                title_label="配队/圣遗物工具",
+                description_label="配队、圣遗物、武器、命座和充能方案",
+                keywords=("配队", "圣遗物", "武器", "命座", "充能", "词条", "面板", "毕业"),
+                title_keywords=("配队", "圣遗物", "词条", "面板"),
+                feasibility=4,
+            ),
+        ),
+    ),
+    (
+        ("鸣潮",),
+        (
+            DemandThemeRule(
+                key="wuthering_build",
+                tool_type="配装/战备工具",
+                title_label="声骸/配队工具",
+                description_label="声骸、词条、配队、共鸣链和武器方案",
+                keywords=("声骸", "词条", "配队", "共鸣链", "武器", "角色养成", "cost", "合鸣"),
+                title_keywords=("声骸", "词条", "配队", "共鸣链"),
+                feasibility=4,
+            ),
+            DemandThemeRule(
+                key="wuthering_map",
+                tool_type="交互地图",
+                title_label="资源收集地图",
+                description_label="声匣、宝箱、资源点、潮汐之遗和收集路线",
+                keywords=("声匣", "宝箱", "资源点", "潮汐之遗", "飞猎手", "收集路线", "地图工具"),
+                title_keywords=("声匣", "宝箱", "潮汐之遗", "地图"),
+                feasibility=4,
+            ),
+        ),
+    ),
+    (
+        ("崩坏星穹铁道", "崩坏：星穹铁道"),
+        (
+            DemandThemeRule(
+                key="starrail_map",
+                tool_type="交互地图",
+                title_label="收集物地图",
+                description_label="宝箱、折纸小鸟、眠鸥之星、战利品和跑图路线",
+                keywords=("宝箱", "折纸小鸟", "眠鸥之星", "战利品", "隐藏成就", "跑图", "地图工具"),
+                title_keywords=("宝箱", "折纸小鸟", "眠鸥之星", "地图"),
+                feasibility=4,
+            ),
+            DemandThemeRule(
+                key="starrail_build",
+                tool_type="配装/战备工具",
+                title_label="遗器/光锥工具",
+                description_label="遗器、光锥、配队、星魂和速度阈值方案",
+                keywords=("遗器", "光锥", "配队", "星魂", "速度阈值", "充能绳", "击破", "词条"),
+                title_keywords=("遗器", "光锥", "配队", "速度阈值"),
+                feasibility=4,
+            ),
+        ),
+    ),
+    (
+        ("CF手游体验服", "穿越火线手游体验服"),
+        (
+            DemandThemeRule(
+                key="cf_setup",
+                tool_type="配装/战备工具",
+                title_label="灵敏度/枪械配置工具",
+                description_label="灵敏度、准星、陀螺仪、压枪和枪械配置",
+                keywords=("灵敏度", "压枪", "准星", "陀螺仪", "枪械", "武器", "按键", "键位", "配置"),
+                title_keywords=("灵敏度", "压枪", "准星", "陀螺仪"),
+                feasibility=4,
+            ),
+        ),
+    ),
+    (
+        ("火影忍者体验服",),
+        (
+            DemandThemeRule(
+                key="naruto_qualification",
+                tool_type="资格/福利聚合",
+                title_label="体验服资格聚合",
+                description_label="体验服资格、抢码、申请、招募和开放时间",
+                keywords=("体验服资格", "资格", "抢码", "申请", "招募", "开放申请", "先到先得"),
+                title_keywords=("体验服资格", "资格", "抢码", "申请"),
+                feasibility=3,
+            ),
+            DemandThemeRule(
+                key="naruto_database",
+                tool_type="数据库",
+                title_label="忍者资料数据库",
+                description_label="忍者、秘卷、通灵、奥义、技能和强度资料",
+                keywords=("忍者", "秘卷", "通灵", "奥义", "技能", "强度", "连招"),
+                title_keywords=("忍者", "秘卷", "通灵", "强度"),
+                feasibility=4,
+            ),
+        ),
+    ),
+    (
+        ("失控进化",),
+        (
+            DemandThemeRule(
+                key="lost_control_survival",
+                tool_type="攻略辅助",
+                title_label="生存建造攻略工具",
+                description_label="建家、抄家、蓝图、资源点、组件和配方规划",
+                keywords=("建家", "抄家", "蓝图", "资源点", "组件", "配方", "材料", "采集", "萌新", "据点"),
+                title_keywords=("建家", "抄家", "蓝图", "资源点"),
+                feasibility=3,
+            ),
+        ),
+    ),
+    (
+        ("暗区突围体验服", "暗区突围"),
+        (
+            DemandThemeRule(
+                key="darkzone_market",
+                tool_type="数据库",
+                title_label="物价行情数据库",
+                description_label="物价、行情、装备、子弹、钥匙和物资资料",
+                keywords=("物价", "行情", "价格", "装备", "子弹", "钥匙", "物资", "市场", "查询"),
+                title_keywords=("物价", "行情", "价格", "市场"),
+                feasibility=4,
+            ),
+            DemandThemeRule(
+                key="darkzone_map",
+                tool_type="交互地图",
+                title_label="撤离/物资地图",
+                description_label="撤离点、物资点、出生点、保险箱和跑图路线",
+                keywords=("撤离点", "物资点", "出生点", "保险箱", "钥匙房", "跑刀", "地图"),
+                title_keywords=("撤离点", "物资点", "保险箱", "地图"),
+                feasibility=4,
+            ),
+        ),
+    ),
+    (
+        ("王者荣耀体验服", "王者荣耀"),
+        (
+            DemandThemeRule(
+                key="honor_build",
+                tool_type="配装/战备工具",
+                title_label="出装/铭文工具",
+                description_label="英雄强度、出装、铭文、装备和技能加点",
+                keywords=("出装", "铭文", "英雄强度", "装备", "技能加点", "连招", "胜率", "打野路线"),
+                title_keywords=("出装", "铭文", "英雄强度", "装备"),
+                feasibility=4,
+            ),
+        ),
+    ),
+)
+
+
+KNOWN_GAME_ALIAS_GROUPS: tuple[tuple[str, ...], ...] = tuple(aliases for aliases, _ in GAME_DOMAIN_THEME_RULES)
+
+
+def _normalize_game_name(name: str) -> str:
+    return re.sub(r"[\s:：·\-—]", "", name or "").lower()
+
+
+def _theme_rules_for_game(game_name: str) -> tuple[DemandThemeRule, ...]:
+    normalized = _normalize_game_name(game_name)
+    matched_rules: list[DemandThemeRule] = []
+    for aliases, rules in GAME_DOMAIN_THEME_RULES:
+        normalized_aliases = [_normalize_game_name(alias) for alias in aliases]
+        if any(alias and (alias in normalized or normalized in alias) for alias in normalized_aliases):
+            matched_rules.extend(rules)
+    return (*DEMAND_THEME_RULES, *matched_rules)
+
+
+def _alias_group_for_game(game_name: str) -> tuple[str, ...]:
+    normalized = _normalize_game_name(game_name)
+    for aliases in KNOWN_GAME_ALIAS_GROUPS:
+        normalized_aliases = tuple(_normalize_game_name(alias) for alias in aliases)
+        if any(alias and (alias in normalized or normalized in alias) for alias in normalized_aliases):
+            return aliases
+    return (game_name,)
+
+
+def _content_belongs_to_game(game_name: str, title: str, body: str) -> bool:
+    """跳过明显串到其他游戏名下的内容，避免跨游戏关键词污染。"""
+    text = _normalize_game_name(f"{title} {body}")
+    current_aliases = tuple(_normalize_game_name(alias) for alias in _alias_group_for_game(game_name))
+    mentions_current = any(alias and alias in text for alias in current_aliases)
+
+    mentions_other = False
+    for aliases in KNOWN_GAME_ALIAS_GROUPS:
+        normalized_aliases = tuple(_normalize_game_name(alias) for alias in aliases)
+        if any(alias in current_aliases for alias in normalized_aliases):
+            continue
+        if any(alias and alias in text for alias in normalized_aliases):
+            mentions_other = True
+            break
+
+    return mentions_current or not mentions_other
+
+
+def _dedupe_overlapping_theme_analyses(analyses: list[dict]) -> list[dict]:
+    """同一工具类型、证据重叠时，优先保留领域词命中的更具体需求。"""
+    deduped: list[dict] = []
+
+    def evidence_ids(item: dict) -> set[str]:
+        return set(item.get("evidence_post_ids") or [])
+
+    def is_generic(item: dict) -> bool:
+        return item.get("theme_key") in GENERIC_THEME_KEYS
+
+    def should_replace(candidate: dict, current: dict) -> bool:
+        if is_generic(candidate) != is_generic(current):
+            return not is_generic(candidate)
+        return float(candidate.get("potential_score") or 0) > float(current.get("potential_score") or 0)
+
+    for item in sorted(analyses, key=lambda value: value["potential_score"], reverse=True):
+        item_evidence = evidence_ids(item)
+        merged = False
+        for index, kept in enumerate(deduped):
+            if item.get("tool_type_suggestion") != kept.get("tool_type_suggestion"):
+                continue
+            kept_evidence = evidence_ids(kept)
+            if item_evidence and kept_evidence and item_evidence.isdisjoint(kept_evidence):
+                continue
+            if should_replace(item, kept):
+                deduped[index] = item
+            merged = True
+            break
+        if not merged:
+            deduped.append(item)
+
+    return sorted(deduped, key=lambda value: value["potential_score"], reverse=True)
 
 
 class LLMPipeline:
@@ -279,6 +585,8 @@ class LLMPipeline:
         for content in contents:
             title = content.title or ""
             body = content.body or ""
+            if not _content_belongs_to_game(game.name, title, body):
+                continue
             title_text = title.lower()
             body_text = body.lower()
             heat = max(
@@ -291,7 +599,7 @@ class LLMPipeline:
                 ),
             )
 
-            for rule in DEMAND_THEME_RULES:
+            for rule in _theme_rules_for_game(game.name):
                 title_hits = [kw for kw in rule.keywords if kw.lower() in title_text]
                 body_hits = [kw for kw in rule.keywords if kw.lower() in body_text]
                 if not title_hits and not body_hits:
@@ -371,7 +679,7 @@ class LLMPipeline:
                 "theme_key": rule.key,
             })
 
-        return sorted(analyses, key=lambda item: item["potential_score"], reverse=True)
+        return _dedupe_overlapping_theme_analyses(analyses)
 
     def _select_theme_focus(self, rule: DemandThemeRule, focus_counts: dict[str, int]) -> str:
         """选择最适合放进需求标题的具体主题词。"""

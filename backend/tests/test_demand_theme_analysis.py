@@ -103,6 +103,104 @@ class DemandThemeAnalysisTest(unittest.TestCase):
         self.assertIn("配装/战备工具", tool_types)
         self.assertIn("交互地图", tool_types)
 
+    def test_locke_domain_terms_create_breeding_mechanism_demand(self):
+        analyses = self.pipeline._theme_analysis_from_contents(
+            SimpleNamespace(name="洛克王国世界", priority_weight=3),
+            [
+                content("洛克孵蛋配方合集，持续更新", "整理目前已知的孵蛋配方和蛋组", 456, 134, 15600, "a"),
+                content("洛克王国世界孵蛋配方表有吗？", "不同精灵配种出来是什么，求配方表", 234, 67, 8900, "b"),
+                content("求分享洛克孵蛋计算工具", "有没有孵蛋模拟器或者计算工具", 45, 12, 2100, "c"),
+            ],
+            {},
+        )
+
+        mechanism = next(a for a in analyses if a["tool_type_suggestion"] == "机制计算器")
+        self.assertIn("孵蛋", mechanism["tool_title"])
+        self.assertGreaterEqual(mechanism["potential_score"], 80)
+
+    def test_open_world_collection_terms_create_map_demands(self):
+        examples = [
+            ("原神", "原神5.6全地图神瞳宝箱收集路线", "新版地图资源全收集，采集路线和点位都整理好了"),
+            ("崩坏：星穹铁道", "眠鸥之星宝箱和折纸小鸟位置", "地图工具没法对应账号，只能一处一处跑图确认"),
+        ]
+
+        for game_name, title, body in examples:
+            with self.subTest(game_name=game_name):
+                analyses = self.pipeline._theme_analysis_from_contents(
+                    SimpleNamespace(name=game_name, priority_weight=1),
+                    [
+                        content(title, body, 140, 55, 9000, "a"),
+                        content(f"{game_name}隐藏宝箱跑图路线", "收集物位置太散，想要地图标点", 90, 36, 6000, "b"),
+                    ],
+                    {},
+                )
+
+                self.assertIn("交互地图", {a["tool_type_suggestion"] for a in analyses})
+
+    def test_fps_and_moba_setup_terms_create_loadout_demands(self):
+        examples = [
+            ("CF手游体验服", "CF手游体验服灵敏度压枪参数", "准星、陀螺仪和枪械配置求推荐"),
+            ("王者荣耀体验服", "王者荣耀体验服新英雄出装铭文", "英雄强度、装备和铭文怎么搭配"),
+        ]
+
+        for game_name, title, body in examples:
+            with self.subTest(game_name=game_name):
+                analyses = self.pipeline._theme_analysis_from_contents(
+                    SimpleNamespace(name=game_name, priority_weight=1),
+                    [
+                        content(title, body, 120, 48, 8000, "a"),
+                        content(f"{game_name}配置推荐工具", "想直接查一套能用的配置方案", 80, 30, 5000, "b"),
+                    ],
+                    {},
+                )
+
+                self.assertIn("配装/战备工具", {a["tool_type_suggestion"] for a in analyses})
+
+    def test_survival_and_economy_terms_create_specific_demands(self):
+        examples = [
+            ("失控进化", "失控进化建家抄家蓝图攻略", "资源点、配方和组件怎么规划最省材料", "攻略辅助"),
+            ("暗区突围体验服", "暗区突围体验服物价行情查询", "装备、子弹和钥匙价格波动太快，想看行情表", "数据库"),
+        ]
+
+        for game_name, title, body, expected_tool_type in examples:
+            with self.subTest(game_name=game_name):
+                analyses = self.pipeline._theme_analysis_from_contents(
+                    SimpleNamespace(name=game_name, priority_weight=1),
+                    [
+                        content(title, body, 130, 52, 8500, "a"),
+                        content(f"{game_name}资料整理", "信息分散，求一个工具集中查询", 78, 26, 4800, "b"),
+                    ],
+                    {},
+                )
+
+                self.assertIn(expected_tool_type, {a["tool_type_suggestion"] for a in analyses})
+
+    def test_posts_that_only_mention_other_games_do_not_trigger_current_game_demand(self):
+        analyses = self.pipeline._theme_analysis_from_contents(
+            SimpleNamespace(name="鸣潮", priority_weight=1),
+            [
+                content("洛克王国世界跑图辅助工具", "洛克王国地图资源查询和蛋组查询器", 200, 80, 12000, "a"),
+                content("三角洲行动卡战备怎么搞", "武器配件和战备阈值看不懂", 160, 70, 10000, "b"),
+            ],
+            {},
+        )
+
+        self.assertEqual([], analyses)
+
+    def test_domain_specific_theme_replaces_overlapping_generic_theme(self):
+        analyses = self.pipeline._theme_analysis_from_contents(
+            SimpleNamespace(name="原神", priority_weight=1),
+            [
+                content("原神5.6全地图神瞳宝箱收集路线", "新版地图资源全收集，采集路线和点位都整理好了", 160, 80, 12000, "a"),
+                content("原神隐藏宝箱跑图路线", "收集物位置太散，想要地图标点", 100, 50, 8000, "b"),
+            ],
+            {},
+        )
+
+        map_demands = [a for a in analyses if a["tool_type_suggestion"] == "交互地图"]
+        self.assertEqual(1, len(map_demands))
+        self.assertEqual("genshin_map", map_demands[0]["theme_key"])
+
 
 if __name__ == "__main__":
     unittest.main()
