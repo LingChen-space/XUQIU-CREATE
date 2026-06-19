@@ -3,6 +3,7 @@ import { RefreshCw, Loader2, BarChart3, Gamepad2, TrendingUp, Zap, FileText, Plu
 import { api } from "../api/client"
 import type { DashboardSummary, DemandCard, Game, CrawlProgress, CrawlProgressRecord } from "../types"
 import DemandCardView from "../components/DemandCard"
+import { DEMAND_CATEGORY_LABELS, groupDemandsByGame } from "../utils/demandGrouping"
 
 const LEVEL_STYLE: Record<string, { bg: string; color: string }> = {
   "S级": { bg: "var(--red-light)", color: "#b91c1c" },
@@ -12,14 +13,6 @@ const LEVEL_STYLE: Record<string, { bg: string; color: string }> = {
 }
 
 const PLATFORM_COLORS: Record<string, { label: string; color: string; bg: string }> = {
-  bilibili: { label: "B站", color: "#fb7299", bg: "rgba(251,114,153,0.1)" },
-  douyin: { label: "抖音", color: "#fe2c55", bg: "rgba(254,44,85,0.1)" },
-  taptap: { label: "TapTap", color: "#15bfff", bg: "rgba(21,191,255,0.1)" },
-  xiaoheihe: { label: "小黑盒", color: "#00c091", bg: "rgba(0,192,145,0.1)" },
-  heybox: { label: "小黑盒", color: "#00c091", bg: "rgba(0,192,145,0.1)" },
-  nga: { label: "NGA", color: "#f4a460", bg: "rgba(244,164,96,0.1)" },
-  weibo: { label: "微博", color: "#e6162d", bg: "rgba(230,22,45,0.1)" },
-  tieba: { label: "贴吧", color: "#3385ff", bg: "rgba(51,133,255,0.1)" },
   bilibili: { label: "B站", color: "#fb7299", bg: "rgba(251,114,153,0.1)" },
   douyin: { label: "抖音", color: "#fe2c55", bg: "rgba(254,44,85,0.1)" },
   taptap: { label: "TapTap", color: "#15bfff", bg: "rgba(21,191,255,0.1)" },
@@ -220,8 +213,7 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
   const visibleDemands = (data?.top_demands ?? [])
     .filter((d) => activeGameNames.has(d.game_name))
     .sort((a, b) => b.potential_score - a.potential_score)
-  const toolDemands = visibleDemands.filter((d) => d.demand_category !== "experience_server")
-  const experienceDemands = visibleDemands.filter((d) => d.demand_category === "experience_server")
+  const demandGroups = groupDemandsByGame(visibleDemands)
 
   if (loading) {
     return (
@@ -807,22 +799,7 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
               </button>
             </div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 24, alignItems: "start" }}>
-              <DemandColumn
-                title="工具需求"
-                count={toolDemands.length}
-                emptyText="暂无工具需求"
-                demands={toolDemands}
-                onSelect={onSelect}
-              />
-              <DemandColumn
-                title="体验服需求"
-                count={experienceDemands.length}
-                emptyText="暂无体验服需求"
-                demands={experienceDemands}
-                onSelect={onSelect}
-              />
-            </div>
+            <DemandGameGroups groups={demandGroups} onSelect={onSelect} />
           )}
         </>
       )}
@@ -830,46 +807,49 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
   )
 }
 
-function DemandColumn({
-  title,
-  count,
-  emptyText,
-  demands,
+function DemandGameGroups({
+  groups,
   onSelect,
 }: {
-  title: string
-  count: number
-  emptyText: string
-  demands: DemandCard[]
+  groups: ReturnType<typeof groupDemandsByGame>
   onSelect: (d: DemandCard) => void
 }) {
   return (
-    <section>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{title}</h3>
-        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{count} 条</span>
-      </div>
-      {demands.length === 0 ? (
-        <div style={{
-          minHeight: 110,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "var(--text-muted)",
-          fontSize: 13,
-          border: "1px dashed var(--border)",
-          borderRadius: 8,
-          background: "#f9fafb",
-        }}>
-          {emptyText}
-        </div>
-      ) : (
-        <div className="demand-grid" style={{ gridTemplateColumns: "1fr" }}>
-          {demands.map((d) => (
-            <DemandCardView key={d.id} demand={d} onClick={() => onSelect(d)} />
-          ))}
-        </div>
-      )}
-    </section>
+    <div className="daily-demand-game-groups">
+      {groups.map((group) => {
+        const categoryLabels = group.categories.join(" / ")
+
+        return (
+          <section key={group.gameId} className="daily-demand-game-group">
+            <div className="daily-demand-game-header">
+              <div>
+                <h3>{group.gameName}</h3>
+                <div className="daily-demand-game-meta">
+                  <span>{group.gameGenre}</span>
+                  <span>{categoryLabels}</span>
+                  <span>{group.count} 个分支</span>
+                </div>
+              </div>
+              <div className="daily-demand-top-score">
+                <strong>{group.topScore}</strong>
+                <span>最高潜力</span>
+              </div>
+            </div>
+
+            <div className="daily-demand-branch-grid">
+              {group.demands.map((d) => (
+                <div key={d.id} className="daily-demand-branch">
+                  <div className="daily-demand-branch-kicker">
+                    <span>{DEMAND_CATEGORY_LABELS[d.demand_category]}</span>
+                    <span>{d.demand_category === "experience_server" ? d.experience_focus?.join(" / ") || "体验服内容" : d.tool_type}</span>
+                  </div>
+                  <DemandCardView demand={d} onClick={() => onSelect(d)} showFullSignals={false} />
+                </div>
+              ))}
+            </div>
+          </section>
+        )
+      })}
+    </div>
   )
 }

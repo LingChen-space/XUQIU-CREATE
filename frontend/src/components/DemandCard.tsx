@@ -1,5 +1,6 @@
 import { BellRing, Clock, Gauge, Megaphone, RefreshCw } from "lucide-react"
 import type { DemandCard } from "../types"
+import { getDemandDisplayTitle } from "../utils/demandGrouping"
 
 const SIGNAL_LABELS: Record<string, string> = {
   repeat_question: "重复提问",
@@ -31,13 +32,6 @@ const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
 const CATEGORY_STYLE: Record<string, { label: string; bg: string; color: string }> = {
   tool: { label: "工具需求", bg: "var(--primary-light)", color: "var(--primary)" },
   experience_server: { label: "体验服需求", bg: "#ecfdf5", color: "#059669" },
-}
-
-const getDemandDisplayTitle = (demand: DemandCard) => {
-  if (demand.demand_category === "experience_server" && demand.experience_focus?.length > 0) {
-    return `${demand.game_name} · ${demand.experience_focus.join(" / ")}`
-  }
-  return demand.title
 }
 
 const getExperienceInsight = (demand: DemandCard) => {
