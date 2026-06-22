@@ -28,6 +28,11 @@ class DemandClassificationTest(unittest.TestCase):
 
         self.assertEqual(focus, ["爆料内容", "更新内容", "资格招募"])
 
+    def test_experience_focus_does_not_default_to_recruitment(self):
+        focus = extract_experience_focus("体验服新地图核电站曝光，版本更新新增撤离路线。")
+
+        self.assertEqual(focus, ["爆料内容", "更新内容"])
+
     def test_regular_calculator_stays_tool_demand(self):
         category = classify_demand_category(
             game_name="三角洲行动",
@@ -42,18 +47,22 @@ class DemandClassificationTest(unittest.TestCase):
     def test_experience_server_insight_splits_updates_leaks_and_recruitment(self):
         insight = build_experience_server_insight(
             "体验服版本更新：新增地图和武器平衡调整。",
-            "爆料称新角色将在测试服登场，资格招募已开启报名。",
+            "爆料称新角色将在测试服登场，资格招募已开启报名，报名时间6月20日10:00。",
         )
 
         self.assertIn("新增地图", insight.update_content)
         self.assertIn("新角色", insight.leak_content)
         self.assertIn("资格招募已开启", insight.recruitment_status)
+        self.assertIn("6月20日10:00", insight.recruitment_time)
+        self.assertEqual(insight.current_stage, "报名中")
         self.assertTrue(insight.recruitment_open)
 
     def test_experience_server_insight_reports_missing_recruitment(self):
         insight = build_experience_server_insight("体验服更新内容曝光，新玩法即将测试。")
 
         self.assertEqual(insight.recruitment_status, "未发现资格招募开启消息")
+        self.assertEqual(insight.recruitment_time, "未发现明确时间")
+        self.assertEqual(insight.current_stage, "内容爆料")
         self.assertFalse(insight.recruitment_open)
 
 

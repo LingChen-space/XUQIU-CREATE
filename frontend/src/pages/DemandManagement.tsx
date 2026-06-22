@@ -8,6 +8,7 @@ import {
   getDemandDisplayTitle,
   groupDemandsByGame,
 } from "../utils/demandGrouping"
+import { getCompactExperienceInsight } from "../utils/experienceInsight"
 
 const TOOL_TYPES = ["全部", "配装/战备工具", "交互地图", "抽卡/概率分析", "资格/福利聚合", "机制计算器", "排行榜/对战数据", "剧情/收集进度", "攻略辅助", "模拟器", "数据库", "其他"]
 const STATUSES = ["全部", "待评估", "已采纳", "开发中", "已上线", "已驳回"]
@@ -202,7 +203,15 @@ export default function DemandManagement({ onSelect, onCountChange }: Props) {
                                 ? d.experience_focus?.join(" / ") || "体验服内容"
                                 : d.tool_type}
                             </span>
-                            {d.llm_reasoning && <span className="demand-branch-reason">{d.llm_reasoning}</span>}
+                            {d.demand_category === "experience_server" ? (
+                              <div className="experience-branch-summary">
+                                {getCompactExperienceInsight(d).map((item) => (
+                                  <span key={item}>{item}</span>
+                                ))}
+                              </div>
+                            ) : (
+                              d.llm_reasoning && <span className="demand-branch-reason">{d.llm_reasoning}</span>
+                            )}
                           </div>
                         </div>
 

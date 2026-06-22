@@ -23,6 +23,21 @@ from app.schemas.demand import (
 router = APIRouter(prefix="/api/demands", tags=["demands"])
 
 
+async def _get_evidence_text(demand: Demand, db: AsyncSession) -> str:
+    try:
+        evidence_ids = json.loads(demand.evidence_post_ids)
+    except (json.JSONDecodeError, TypeError):
+        evidence_ids = []
+
+    if not evidence_ids:
+        return ""
+
+    ev_stmt = select(PlatformContent).where(PlatformContent.id.in_(evidence_ids[:5]))
+    ev_result = await db.execute(ev_stmt)
+    contents = ev_result.scalars().all()
+    return " ".join(f"{content.title or ''} {content.body or ''}" for content in contents)
+
+
 async def _build_demand_card(demand: Demand, db: AsyncSession) -> DemandCard:
     """构建需求卡片（含游戏名等关联信息）。"""
     # 游戏名
@@ -49,10 +64,11 @@ async def _build_demand_card(demand: Demand, db: AsyncSession) -> DemandCard:
         demand.description,
         llm_reasoning,
     )
-    focus_text = " ".join([demand.title, demand.description or "", llm_reasoning])
+    evidence_text = await _get_evidence_text(demand, db) if category == "experience_server" else ""
+    focus_text = " ".join([demand.title, demand.description or "", llm_reasoning, evidence_text])
     experience_focus = extract_experience_focus(focus_text) if category == "experience_server" else []
     experience_insight = (
-        build_experience_server_insight(demand.title, demand.description, llm_reasoning)
+        build_experience_server_insight(demand.title, demand.description, llm_reasoning, evidence_text)
         if category == "experience_server"
         else None
     )
@@ -110,10 +126,11 @@ async def _build_history_card(demand: Demand, db: AsyncSession) -> DemandHistory
         demand.description,
         llm_reasoning,
     )
-    focus_text = " ".join([demand.title, demand.description or "", llm_reasoning])
+    evidence_text = await _get_evidence_text(demand, db) if category == "experience_server" else ""
+    focus_text = " ".join([demand.title, demand.description or "", llm_reasoning, evidence_text])
     experience_focus = extract_experience_focus(focus_text) if category == "experience_server" else []
     experience_insight = (
-        build_experience_server_insight(demand.title, demand.description, llm_reasoning)
+        build_experience_server_insight(demand.title, demand.description, llm_reasoning, evidence_text)
         if category == "experience_server"
         else None
     )

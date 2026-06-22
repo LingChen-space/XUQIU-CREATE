@@ -28,6 +28,8 @@ export interface ExperienceServerInsight {
   update_content: string
   leak_content: string
   recruitment_status: string
+  recruitment_time: string
+  current_stage: string
   recruitment_open: boolean
 }
 

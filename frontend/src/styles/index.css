@@ -1045,6 +1045,24 @@
   white-space: nowrap;
 }
 
+.experience-branch-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+}
+
+.experience-branch-summary span {
+  max-width: 280px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .demand-branch-stats {
   display: grid;
   grid-template-columns: 48px 72px 86px;

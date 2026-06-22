@@ -1,6 +1,7 @@
 import { BellRing, Clock, Gauge, Megaphone, RefreshCw } from "lucide-react"
 import type { DemandCard } from "../types"
 import { getDemandDisplayTitle } from "../utils/demandGrouping"
+import { getExperienceInsightRows } from "../utils/experienceInsight"
 
 const SIGNAL_LABELS: Record<string, string> = {
   repeat_question: "重复提问",
@@ -34,42 +35,32 @@ const CATEGORY_STYLE: Record<string, { label: string; bg: string; color: string 
   experience_server: { label: "体验服需求", bg: "#ecfdf5", color: "#059669" },
 }
 
-const getExperienceInsight = (demand: DemandCard) => {
-  return demand.experience_insight || {
-    update_content: "未发现更新内容",
-    leak_content: "未发现爆料内容",
-    recruitment_status: demand.experience_focus?.includes("资格招募") ? "发现资格招募相关消息" : "未发现资格招募开启消息",
-    recruitment_open: demand.experience_focus?.includes("资格招募") || false,
-  }
+const EXPERIENCE_ROW_ICONS = {
+  更新内容: RefreshCw,
+  爆料内容: Megaphone,
+  资格招募: BellRing,
+  当前节点: Clock,
 }
 
 function ExperienceInsightList({ demand }: { demand: DemandCard }) {
-  const insight = getExperienceInsight(demand)
-  const rows = [
-    { label: "更新内容", value: insight.update_content, icon: RefreshCw, tone: "#2563eb", bg: "var(--primary-light)" },
-    { label: "爆料内容", value: insight.leak_content, icon: Megaphone, tone: "#7c3aed", bg: "var(--purple-light)" },
-    {
-      label: "资格招募",
-      value: insight.recruitment_status,
-      icon: BellRing,
-      tone: insight.recruitment_open ? "#059669" : "#6b7280",
-      bg: insight.recruitment_open ? "var(--green-light)" : "#f3f4f6",
-    },
-  ]
+  const rows = getExperienceInsightRows(demand)
 
   return (
     <div className="experience-insight-list">
-      {rows.map(({ label, value, icon: Icon, tone, bg }) => (
-        <div key={label} className="experience-insight-row">
-          <span className="experience-insight-icon" style={{ background: bg, color: tone }}>
-            <Icon size={13} />
-          </span>
-          <div className="experience-insight-copy">
-            <span className="experience-insight-label">{label}</span>
-            <span className="experience-insight-text">{value}</span>
+      {rows.map(({ label, value, tone, bg }) => {
+        const Icon = EXPERIENCE_ROW_ICONS[label]
+        return (
+          <div key={label} className="experience-insight-row">
+            <span className="experience-insight-icon" style={{ background: bg, color: tone }}>
+              <Icon size={13} />
+            </span>
+            <div className="experience-insight-copy">
+              <span className="experience-insight-label">{label}</span>
+              <span className="experience-insight-text">{value}</span>
+            </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

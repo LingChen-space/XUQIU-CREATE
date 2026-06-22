@@ -3,6 +3,7 @@ import { BellRing, ExternalLink, Loader2, Clock, Gauge, Flag, Megaphone, Refresh
 import { api } from "../api/client"
 import type { DemandCard, DemandDetail } from "../types"
 import RadarChart from "./RadarChart"
+import { getExperienceInsightRows } from "../utils/experienceInsight"
 
 const SIGNAL_NAMES: [string, string][] = [
   ["重复提问密度", "repeat_question"],
@@ -21,61 +22,51 @@ const getDemandDisplayTitle = (demand: DemandCard | DemandDetail) => {
   return demand.title
 }
 
-const getExperienceInsight = (demand: DemandCard | DemandDetail) => {
-  return demand.experience_insight || {
-    update_content: "未发现更新内容",
-    leak_content: "未发现爆料内容",
-    recruitment_status: demand.experience_focus?.includes("资格招募") ? "发现资格招募相关消息" : "未发现资格招募开启消息",
-    recruitment_open: demand.experience_focus?.includes("资格招募") || false,
-  }
+const EXPERIENCE_ROW_ICONS = {
+  更新内容: RefreshCw,
+  爆料内容: Megaphone,
+  资格招募: BellRing,
+  当前节点: Clock,
 }
 
 function ExperienceInsightPanel({ demand }: { demand: DemandCard | DemandDetail }) {
-  const insight = getExperienceInsight(demand)
-  const rows = [
-    { label: "更新内容", value: insight.update_content, icon: RefreshCw, tone: "#2563eb", bg: "var(--primary-light)" },
-    { label: "爆料内容", value: insight.leak_content, icon: Megaphone, tone: "#7c3aed", bg: "var(--purple-light)" },
-    {
-      label: "资格招募",
-      value: insight.recruitment_status,
-      icon: BellRing,
-      tone: insight.recruitment_open ? "#059669" : "#6b7280",
-      bg: insight.recruitment_open ? "var(--green-light)" : "#f3f4f6",
-    },
-  ]
+  const rows = getExperienceInsightRows(demand)
 
   return (
     <div className="slideover-section">
       <h4>体验服内容</h4>
       <div style={{ display: "grid", gap: 10 }}>
-        {rows.map(({ label, value, icon: Icon, tone, bg }) => (
-          <div key={label} style={{
-            display: "grid",
-            gridTemplateColumns: "32px minmax(0, 1fr)",
-            gap: 12,
-            alignItems: "start",
-            padding: "12px 14px",
-            background: "#f9fafb",
-            borderRadius: 8,
-          }}>
-            <span style={{
-              width: 32,
-              height: 32,
-              borderRadius: 7,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: bg,
-              color: tone,
+        {rows.map(({ label, value, tone, bg }) => {
+          const Icon = EXPERIENCE_ROW_ICONS[label]
+          return (
+            <div key={label} style={{
+              display: "grid",
+              gridTemplateColumns: "32px minmax(0, 1fr)",
+              gap: 12,
+              alignItems: "start",
+              padding: "12px 14px",
+              background: "#f9fafb",
+              borderRadius: 8,
             }}>
-              <Icon size={15} />
-            </span>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 3 }}>{label}</div>
-              <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.7 }}>{value}</div>
+              <span style={{
+                width: 32,
+                height: 32,
+                borderRadius: 7,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: bg,
+                color: tone,
+              }}>
+                <Icon size={15} />
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 3 }}>{label}</div>
+                <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.7 }}>{value}</div>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
