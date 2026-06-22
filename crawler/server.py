@@ -49,6 +49,7 @@ HEYBOX_RANGE_VALUES = ("7d", "30d", "180d", "360d")
 HEYBOX_SORT_VALUES = ("default", "create_date", "award_num", "comment_num")
 TAPTAP_SORT_VALUES = ("default", "update_time,desc", "commented_time,desc")
 DOUYIN_SORT_VALUES = ("default", "latest", "most_like")
+DOUYIN_BROWSER_METHOD_VALUES = ("method1", "method2", "cloak", "playwright")
 
 DOUYIN_COOKIE_PATH = SCRIPT_DIR / ".cloakbrowser" / "douyin-cookies.json"
 DOUYIN_LOGIN_COOKIE_NAMES = {
@@ -144,7 +145,7 @@ def _get_douyin_login_state() -> dict[str, Any]:
         return dict(_douyin_login_state)
 
 
-def _run_douyin_login_session(timeout_seconds: int) -> None:
+def _run_douyin_login_session(timeout_seconds: int, browser_method: str = "method1") -> None:
     from app.douyin.browser_core import (
         DOUYIN_SCREEN,
         DOUYIN_WWW_URL,
@@ -167,6 +168,7 @@ def _run_douyin_login_session(timeout_seconds: int) -> None:
             DOUYIN_WWW_URL,
             initial_cookies=initial_cookies,
             headless=False,
+            browser_method=browser_method,
             context_kwargs={
                 "screen": DOUYIN_SCREEN,
                 "viewport": DOUYIN_SCREEN,
@@ -248,12 +250,20 @@ class TapTapCrawlRequest(CrawlRequest):
 class DouyinCrawlRequest(CrawlRequest):
     sort: str = "default"
     headless: bool = True
+    browser_method: str = "method1"
 
     @field_validator("sort")
     @classmethod
     def validate_sort(cls, v: str) -> str:
         if v not in DOUYIN_SORT_VALUES:
             raise ValueError(f"sort must be one of: {DOUYIN_SORT_VALUES}")
+        return v
+
+    @field_validator("browser_method")
+    @classmethod
+    def validate_browser_method(cls, v: str) -> str:
+        if v not in DOUYIN_BROWSER_METHOD_VALUES:
+            raise ValueError("browser_method must be one of: method1, method2")
         return v
 
 
@@ -387,7 +397,7 @@ def _fetch_taptap(keyword: str, count: int, sort: str | None, proxy_url: str | N
 # 抖音采集
 # ---------------------------------------------------------------------------
 
-async def _fetch_douyin(keyword: str, count: int, sort: str, headless: bool) -> list[dict]:
+async def _fetch_douyin(keyword: str, count: int, sort: str, headless: bool, browser_method: str = "method1") -> list[dict]:
     from app.douyin.fetcher import (
         DouyinAntiSpamException,
         get_filter_sort_type,
@@ -395,13 +405,17 @@ async def _fetch_douyin(keyword: str, count: int, sort: str, headless: bool) -> 
     )
 
     try:
-        logger.info(f"[Douyin] keyword={keyword!r} count={count} sort={sort!r} headless={headless!r}")
+        logger.info(
+            f"[Douyin] keyword={keyword!r} count={count} sort={sort!r} "
+            f"headless={headless!r} browser_method={browser_method!r}"
+        )
         response_items, refreshed_cookies = await get_douyin_video_search_response(
             search_word=keyword,
             cookie_data=_load_douyin_cookies(),
             sort_type=get_filter_sort_type(sort),
             limit=count,
             headless=headless,
+            browser_method=browser_method,
         )
     except DouyinAntiSpamException as exc:
         raise RuntimeError(f"抖音风控/验证: {exc} 请点击进度区域的“登录”按钮重新登录后再试。")
@@ -468,7 +482,12 @@ async def douyin_login_status():
 
 
 @app.post("/api/monitor/douyin/login")
-async def start_douyin_login(timeout_seconds: int = Query(default=300, ge=30, le=1800)):
+async def start_douyin_login(
+    timeout_seconds: int = Query(default=300, ge=30, le=1800),
+    browser_method: str = Query(default="method1"),
+):
+    if browser_method not in DOUYIN_BROWSER_METHOD_VALUES:
+        raise HTTPException(status_code=400, detail="browser_method must be one of: method1, method2")
     state = _get_douyin_login_state()
     if state.get("running"):
         return {"ok": True, **state}
@@ -480,7 +499,7 @@ async def start_douyin_login(timeout_seconds: int = Query(default=300, ge=30, le
     )
     thread = threading.Thread(
         target=_run_douyin_login_session,
-        args=(timeout_seconds,),
+        args=(timeout_seconds, browser_method),
         daemon=True,
     )
     thread.start()
@@ -493,7 +512,7 @@ async def crawl_douyin(req: DouyinCrawlRequest):
     if not douyin_ready:
         raise HTTPException(status_code=400, detail="抖音未登录，请先点击进度区域的“登录”按钮完成登录。")
     try:
-        items = await _fetch_douyin(req.keyword, req.count, req.sort, req.headless)
+        items = await _fetch_douyin(req.keyword, req.count, req.sort, req.headless, req.browser_method)
         return CrawlResponse(ok=True, platform="douyin", keyword=req.keyword, count=len(items), items=items)
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))

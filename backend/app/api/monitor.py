@@ -52,6 +52,7 @@ class RetryRequest(BaseModel):
     keyword: str
     crawl_count: int = 50
     proxy_mode: str = "auto"
+    douyin_browser_method: str = "method1"
 
 
 @router.get("/crawl/progress")
@@ -98,6 +99,8 @@ async def retry_crawl(req: RetryRequest):
 
         if req.proxy_mode not in {"auto", "none", "proxy"}:
             raise HTTPException(status_code=400, detail="proxy_mode 仅支持 auto/none/proxy")
+        if req.douyin_browser_method not in {"method1", "method2"}:
+            raise HTTPException(status_code=400, detail="douyin_browser_method 仅支持 method1/method2")
 
         try:
             r = await adapter.ingest_single(
@@ -106,6 +109,7 @@ async def retry_crawl(req: RetryRequest):
                 game_ids,
                 req.crawl_count,
                 proxy_mode=req.proxy_mode,
+                douyin_browser_method=req.douyin_browser_method,
             )
             return r
         except Exception as e:

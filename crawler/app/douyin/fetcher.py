@@ -128,13 +128,15 @@ async def get_douyin_video_search_response(search_word: str,
                                            filter_duration: dict = DOUYIN_SEARCH_FILTER_DURATION["all"],
                                            filter_content_type: dict = DOUYIN_SEARCH_FILTER_CONTENT_TYPE["all"],
                                            limit: int = 10,
-                                           headless: bool | None = None):
+                                           headless: bool | None = None,
+                                           browser_method: str | None = None):
     
     page_url = DOUYIN_VIDEO_SEARCH_URL.format(search_word)
     context = await start_douyin_transient_context(
         target_url=page_url,
         initial_cookies=cookie_data,
         headless=headless,
+        browser_method=browser_method,
         context_kwargs={
             "viewport": {"width": 1440, "height": 1000},
             "screen": DOUYIN_SCREEN,
