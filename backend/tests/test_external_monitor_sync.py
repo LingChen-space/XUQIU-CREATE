@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.database import Base
 from app.models.external_monitor_cursor import ExternalMonitorCursor
+from app.models.external_monitor_record import ExternalMonitorRecord
 from app.models.game import Game, GameGenre, GameStatus
 from app.models.platform_content import ContentPlatform, PlatformContent
 from app.models.platform_search_config import PlatformSearchConfig
@@ -150,6 +151,33 @@ class ExternalMonitorSyncTest(unittest.TestCase):
         self.assertEqual(result["contents"]["duplicates"], 1)
         self.assertEqual(len(asyncio.run(fetch_contents())), 1)
 
+    def test_sync_stores_raw_records_even_when_game_unmatched(self):
+        client = FakeTapKbClient(
+            contents=[
+                {
+                    "external_id": "tap-unmatched",
+                    "platform": "TapTap",
+                    "title": "\u672a\u77e5\u6e38\u620f\u914d\u88c5\u5de5\u5177",
+                    "url": "https://www.taptap.cn/moment/unmatched",
+                    "raw_feed_type": "tap",
+                    "raw": {"id": "unmatched", "title": "\u672a\u77e5\u6e38\u620f\u914d\u88c5\u5de5\u5177"},
+                }
+            ],
+            configs=[],
+        )
+
+        result = asyncio.run(run_sync(client))
+
+        self.assertEqual(result["contents"]["inserted"], 0)
+        self.assertEqual(result["contents"]["unmatched_games"], 1)
+        self.assertEqual(len(asyncio.run(fetch_contents())), 0)
+        raw_rows = asyncio.run(fetch_raw_records())
+        self.assertEqual(len(raw_rows), 1)
+        self.assertEqual(raw_rows[0].source_key, "tap_kb_forum")
+        self.assertEqual(raw_rows[0].feed_type, "tap")
+        self.assertEqual(raw_rows[0].external_id, "tap-unmatched")
+        self.assertEqual(raw_rows[0].title, "\u672a\u77e5\u6e38\u620f\u914d\u88c5\u5de5\u5177")
+
     def test_config_sync_does_not_overwrite_manual_keywords(self):
         async def seed_manual_config():
             async with TestSession() as session:
@@ -247,6 +275,12 @@ async def fetch_configs() -> list[PlatformSearchConfig]:
 async def fetch_cursors() -> list[ExternalMonitorCursor]:
     async with TestSession() as session:
         result = await session.execute(select(ExternalMonitorCursor).order_by(ExternalMonitorCursor.feed_type))
+        return list(result.scalars().all())
+
+
+async def fetch_raw_records() -> list[ExternalMonitorRecord]:
+    async with TestSession() as session:
+        result = await session.execute(select(ExternalMonitorRecord).order_by(ExternalMonitorRecord.external_id))
         return list(result.scalars().all())
 
 

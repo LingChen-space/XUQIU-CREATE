@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.external_monitor_cursor import ExternalMonitorCursor
+from app.models.external_monitor_record import ExternalMonitorRecord
 from app.models.game import Game
 from app.models.platform_content import ContentPlatform, ContentType, PlatformContent
 from app.models.platform_search_config import PlatformSearchConfig
@@ -241,6 +242,7 @@ class TapKbForumSyncService:
             content_result = await self.client.fetch_contents(days, last_ids=saved_last_ids)
             raw_contents, returned_last_ids = self._split_content_result(content_result)
             raw_configs = await self.client.fetch_configs()
+            await self._store_raw_records(raw_contents, returned_last_ids)
             content_stats = await self._sync_contents(raw_contents, force=force)
             config_stats = await self._sync_configs(raw_configs)
             if returned_last_ids:
@@ -298,6 +300,65 @@ class TapKbForumSyncService:
             else:
                 cursor.last_id = last_id
                 cursor.updated_at = datetime.now()
+        await self.session.commit()
+
+    async def _store_raw_records(self, records: list[dict], last_ids: dict[str, int]):
+        if not records:
+            return
+
+        raw_ids = [
+            _first_text(item.get("external_id"), item.get("id"))
+            for item in records
+            if _first_text(item.get("external_id"), item.get("id"))
+        ]
+        existing_by_external_id: dict[str, ExternalMonitorRecord] = {}
+        if raw_ids:
+            result = await self.session.execute(
+                select(ExternalMonitorRecord).where(
+                    ExternalMonitorRecord.source_key == SOURCE_KEY,
+                    ExternalMonitorRecord.external_id.in_(raw_ids),
+                )
+            )
+            existing_by_external_id = {row.external_id: row for row in result.scalars().all()}
+
+        now = datetime.now()
+        touched: set[str] = set()
+        for item in records:
+            external_id = _first_text(item.get("external_id"), item.get("id"))
+            if not external_id:
+                continue
+            feed_type = _first_text(item.get("raw_feed_type"))
+            if not feed_type and ":" in external_id:
+                feed_type = external_id.split(":", 1)[0]
+            scan_last_id = _first_int(last_ids.get(feed_type)) if feed_type else 0
+            raw_json = json.dumps(item.get("raw") if isinstance(item.get("raw"), dict) else item, ensure_ascii=False)
+
+            existing = existing_by_external_id.get(external_id)
+            if existing is None and external_id not in touched:
+                touched.add(external_id)
+                self.session.add(ExternalMonitorRecord(
+                    source_key=SOURCE_KEY,
+                    feed_type=feed_type,
+                    external_id=external_id,
+                    platform=_first_text(item.get("platform")),
+                    title=_first_text(item.get("title")),
+                    url=_first_text(item.get("url"), item.get("link")),
+                    raw_json=raw_json,
+                    scan_last_id=scan_last_id,
+                    fetched_at=now,
+                    updated_at=now,
+                ))
+            else:
+                if existing is None:
+                    continue
+                existing.feed_type = feed_type
+                existing.platform = _first_text(item.get("platform"))
+                existing.title = _first_text(item.get("title"))
+                existing.url = _first_text(item.get("url"), item.get("link"))
+                existing.raw_json = raw_json
+                existing.scan_last_id = scan_last_id
+                existing.updated_at = now
+
         await self.session.commit()
 
     async def _sync_contents(self, records: list[dict], force: bool = False) -> dict:
