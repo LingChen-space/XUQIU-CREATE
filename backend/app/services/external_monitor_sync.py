@@ -4,6 +4,7 @@
 import hashlib
 import json
 import logging
+import re
 import time
 import uuid
 from datetime import datetime
@@ -16,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models.external_monitor_cursor import ExternalMonitorCursor
 from app.models.external_monitor_record import ExternalMonitorRecord
-from app.models.game import Game
+from app.models.game import Game, GameGenre, GameStatus, default_priority_weight
 from app.models.platform_content import ContentPlatform, ContentType, PlatformContent
 from app.models.platform_search_config import PlatformSearchConfig
 from app.utils.engagement import compute_content_hot_score
@@ -37,6 +38,7 @@ LAST_SYNC_STATUS: dict[str, Any] = {
         "duplicates": 0,
         "unmatched_games": 0,
         "invalid": 0,
+        "created_games": 0,
     },
     "configs": {
         "fetched": 0,
@@ -135,6 +137,23 @@ def _extract_records(payload: Any, *keys: str) -> list[dict]:
             if nested:
                 return nested
     return []
+
+
+def _infer_external_game_name(game_name: str, title: str, body: str) -> str:
+    explicit = _first_text(game_name)
+    if explicit:
+        return explicit
+
+    text = f"{title} {body}"
+    quoted = re.search(r"《([^》]{2,40})》", text)
+    if quoted:
+        return quoted.group(1).strip()
+
+    experience = re.search(r"([\u4e00-\u9fffA-Za-z0-9：:·]{2,30}体验服)", text)
+    if experience:
+        return experience.group(1).strip()
+
+    return ""
 
 
 class TapKbExportClient:
@@ -397,15 +416,20 @@ class TapKbForumSyncService:
 
             title = _first_text(item.get("title"))
             body = _first_text(item.get("summary"), item.get("body"), item.get("description"))
-            game = self._match_game(_first_text(item.get("game_name"), item.get("game")), title, body, games_by_name, games)
+            if not title and not body:
+                stats["invalid"] += 1
+                continue
+            game_name = _first_text(item.get("game_name"), item.get("game"))
+            game = self._match_game(game_name, title, body, games_by_name, games)
+            if game is None:
+                game = await self._ensure_external_game(game_name, title, body, games_by_name, games)
+                if game is not None:
+                    stats["created_games"] += 1
             if game is None:
                 stats["unmatched_games"] += 1
                 continue
 
             platform_key, platform = _normalize_platform(item.get("platform"))
-            if not title and not body:
-                stats["invalid"] += 1
-                continue
 
             view_count = _first_int(item.get("view_count"), item.get("views"), item.get("read_count"))
             like_count = _first_int(item.get("like_count"), item.get("likes"), item.get("thumbs"))
@@ -442,6 +466,36 @@ class TapKbForumSyncService:
 
         await self.session.commit()
         return stats
+
+    async def _ensure_external_game(
+        self,
+        game_name: str,
+        title: str,
+        body: str,
+        games_by_name: dict[str, Game],
+        games: list[Game],
+    ) -> Game | None:
+        inferred_name = _infer_external_game_name(game_name, title, body)
+        if not inferred_name:
+            return None
+        existing = games_by_name.get(inferred_name)
+        if existing is not None:
+            return existing
+
+        game = Game(
+            id=str(uuid.uuid4()),
+            name=inferred_name,
+            genre=GameGenre.other,
+            publisher="外部监控",
+            status=GameStatus.operating,
+            priority_weight=default_priority_weight(inferred_name),
+            notes="Tap+快爆后台同步自动创建",
+        )
+        self.session.add(game)
+        await self.session.flush()
+        games_by_name[inferred_name] = game
+        games.append(game)
+        return game
 
     @staticmethod
     def _match_game(game_name: str, title: str, body: str, games_by_name: dict[str, Game], games: list[Game]) -> Game | None:
@@ -532,6 +586,7 @@ class TapKbForumSyncService:
             "duplicates": 0,
             "unmatched_games": 0,
             "invalid": 0,
+            "created_games": 0,
         }
 
     @staticmethod

@@ -36,6 +36,11 @@ async def run_daily_pipeline(force_recrawl: bool = False):
 
     async with async_session() as session:
         try:
+            # --- Step 0: 外部监控后台同步 ---
+            # 外部后台内容不依赖本地搜索词配置，同步可能自动创建新游戏。
+            external_sync = await TapKbForumSyncService(session).sync(days=30, force=force_recrawl)
+            logger.info(f"[DailyPipeline] 外部同步完成 - {external_sync.get('message', '')}")
+
             # --- Step 1: 数据接入 ---
             adapter = DataAdapter(session)
 
@@ -67,10 +72,6 @@ async def run_daily_pipeline(force_recrawl: bool = False):
                     "demands_count": 0,
                     "report_id": None,
                 }
-
-            # --- Step 0: 外部监控后台同步 ---
-            external_sync = await TapKbForumSyncService(session).sync(days=30, force=force_recrawl)
-            logger.info(f"[DailyPipeline] 外部同步完成 - {external_sync.get('message', '')}")
 
             count = await adapter.ingest_contents(game_ids, force_recrawl=force_recrawl)
             logger.info(f"[DailyPipeline] 数据接入完成 - {count} 条内容")

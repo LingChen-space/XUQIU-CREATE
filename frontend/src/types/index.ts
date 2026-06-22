@@ -194,6 +194,7 @@ export interface ExternalSyncStats {
   duplicates?: number
   unmatched_games?: number
   invalid?: number
+  created_games?: number
   upserted?: number
   skipped?: number
 }

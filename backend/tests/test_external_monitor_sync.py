@@ -179,6 +179,57 @@ class ExternalMonitorSyncTest(unittest.TestCase):
         self.assertEqual(raw_rows[0].external_id, "tap-unmatched")
         self.assertEqual(raw_rows[0].title, "\u672a\u77e5\u6e38\u620f\u914d\u88c5\u5de5\u5177")
 
+    def test_sync_creates_external_game_for_unconfigured_monitor_content(self):
+        game_name = "\u65b0\u6e38\u620f"
+        client = FakeTapKbClient(
+            contents=[
+                {
+                    "external_id": "hykb-new-game",
+                    "platform": KB_FORUM,
+                    "game_name": game_name,
+                    "title": f"\u300a{game_name}\u300b\u5730\u56fe\u5de5\u5177\u6c42\u63a8\u8350",
+                    "url": "https://bbs.3839.com/thread-new-game.htm",
+                    "raw_feed_type": "hykb",
+                }
+            ],
+            configs=[],
+        )
+
+        result = asyncio.run(run_sync(client))
+
+        self.assertEqual(result["contents"]["inserted"], 1)
+        self.assertEqual(result["contents"]["unmatched_games"], 0)
+        self.assertEqual(result["contents"]["created_games"], 1)
+        games = asyncio.run(fetch_games())
+        created = next((g for g in games if g.name == game_name), None)
+        self.assertIsNotNone(created)
+        self.assertEqual(created.publisher, "\u5916\u90e8\u76d1\u63a7")
+        rows = asyncio.run(fetch_contents())
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].game_id, created.id)
+
+    def test_sync_infers_external_game_from_quoted_title(self):
+        game_name = "\u5f71\u4e4b\u5203"
+        client = FakeTapKbClient(
+            contents=[
+                {
+                    "external_id": "tap-quoted-game",
+                    "platform": "TapTap",
+                    "title": f"\u300a{game_name}\u300b\u62bd\u5361\u8bb0\u5f55\u5de5\u5177\u4e0a\u7ebf",
+                    "url": "https://www.taptap.cn/topic/quoted-game",
+                    "raw_feed_type": "tap",
+                }
+            ],
+            configs=[],
+        )
+
+        result = asyncio.run(run_sync(client))
+
+        self.assertEqual(result["contents"]["inserted"], 1)
+        self.assertEqual(result["contents"]["created_games"], 1)
+        games = asyncio.run(fetch_games())
+        self.assertIn(game_name, {g.name for g in games})
+
     def test_config_sync_does_not_overwrite_manual_keywords(self):
         async def seed_manual_config():
             async with TestSession() as session:
@@ -316,6 +367,12 @@ async def fetch_cursors() -> list[ExternalMonitorCursor]:
 async def fetch_raw_records() -> list[ExternalMonitorRecord]:
     async with TestSession() as session:
         result = await session.execute(select(ExternalMonitorRecord).order_by(ExternalMonitorRecord.external_id))
+        return list(result.scalars().all())
+
+
+async def fetch_games() -> list[Game]:
+    async with TestSession() as session:
+        result = await session.execute(select(Game).order_by(Game.name))
         return list(result.scalars().all())
 
 
