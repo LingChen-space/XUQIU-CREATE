@@ -407,6 +407,7 @@ class DataAdapter:
     async def _call_monitor(
         self, platform_key: str, keyword: str, count: int = 50,
         proxy_url: str | None = None, proxy_mode: str = "auto",
+        douyin_browser_method: str = "method1",
     ) -> list[dict]:
         """调用监控服务采集指定平台数据（支持多排序序列去重）。"""
         self._last_monitor_errors = []
@@ -429,9 +430,9 @@ class DataAdapter:
             ]
         elif platform_key == "douyin":
             sort_configs = [
-                {"keyword": keyword, "count": count, "sort": "default", "headless": False},
-                {"keyword": keyword, "count": count, "sort": "latest", "headless": False},
-                {"keyword": keyword, "count": count, "sort": "most_like", "headless": False},
+                {"keyword": keyword, "count": count, "sort": "default", "headless": False, "browser_method": douyin_browser_method},
+                {"keyword": keyword, "count": count, "sort": "latest", "headless": False, "browser_method": douyin_browser_method},
+                {"keyword": keyword, "count": count, "sort": "most_like", "headless": False, "browser_method": douyin_browser_method},
             ]
         else:
             sort_configs = [{"keyword": keyword, "count": count}]
@@ -791,6 +792,7 @@ class DataAdapter:
     async def _ingest_single_combo(
         self, platform_key: str, keyword: str, crawl_count: int,
         config: PlatformSearchConfig, games: dict, proxy_mode: str = "auto",
+        douyin_browser_method: str = "method1",
     ) -> int:
         """采集单个 (平台, 关键词) 组合并入库，返回入库条数。"""
         proxy_url = getattr(config, "proxy_url", None) or None
@@ -800,7 +802,12 @@ class DataAdapter:
         try:
             # 1. 调用监控采集
             items = await self._call_monitor(
-                platform_key, keyword, crawl_count, proxy_url, proxy_mode=proxy_mode
+                platform_key,
+                keyword,
+                crawl_count,
+                proxy_url,
+                proxy_mode=proxy_mode,
+                douyin_browser_method=douyin_browser_method,
             )
             fetched = len(items)
 
@@ -958,6 +965,7 @@ class DataAdapter:
     async def ingest_single(
         self, platform_key: str, keyword: str, game_ids: list[str],
         crawl_count: int = 50, proxy_mode: str = "auto",
+        douyin_browser_method: str = "method1",
     ) -> dict:
         """手动重试单个 (平台, 关键词) 组合的采集。"""
         if self.use_mock:
@@ -986,7 +994,13 @@ class DataAdapter:
             raise MonitorCrawlError("TapTap 未配置代理地址，请先在搜索词配置中填写代理。")
 
         count = await self._ingest_single_combo(
-            platform_key, keyword, crawl_count, config, games, proxy_mode=proxy_mode
+            platform_key,
+            keyword,
+            crawl_count,
+            config,
+            games,
+            proxy_mode=proxy_mode,
+            douyin_browser_method=douyin_browser_method,
         )
         return {
             "ok": True,
@@ -994,6 +1008,7 @@ class DataAdapter:
             "keyword": keyword,
             "ingested": count,
             "proxy_mode": proxy_mode,
+            "douyin_browser_method": douyin_browser_method,
         }
 
     async def get_progress(self) -> list[dict]:

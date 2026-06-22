@@ -20,14 +20,6 @@ const PLATFORM_COLORS: Record<string, { label: string; color: string; bg: string
   nga: { label: "NGA", color: "#f4a460", bg: "rgba(244,164,96,0.1)" },
   weibo: { label: "微博", color: "#e6162d", bg: "rgba(230,22,45,0.1)" },
   tieba: { label: "贴吧", color: "#3385ff", bg: "rgba(51,133,255,0.1)" },
-  bilibili: { label: "B站", color: "#fb7299", bg: "rgba(251,114,153,0.1)" },
-  douyin: { label: "抖音", color: "#fe2c55", bg: "rgba(254,44,85,0.1)" },
-  taptap: { label: "TapTap", color: "#15bfff", bg: "rgba(21,191,255,0.1)" },
-  xiaoheihe: { label: "小黑盒", color: "#00c091", bg: "rgba(0,192,145,0.1)" },
-  heybox: { label: "小黑盒", color: "#00c091", bg: "rgba(0,192,145,0.1)" },
-  nga: { label: "NGA", color: "#f4a460", bg: "rgba(244,164,96,0.1)" },
-  weibo: { label: "微博", color: "#e6162d", bg: "rgba(230,22,45,0.1)" },
-  tieba: { label: "贴吧", color: "#3385ff", bg: "rgba(51,133,255,0.1)" },
   "B站": { label: "B站", color: "#fb7299", bg: "rgba(251,114,153,0.1)" },
   "抖音": { label: "抖音", color: "#fe2c55", bg: "rgba(254,44,85,0.1)" },
   "TapTap": { label: "TapTap", color: "#15bfff", bg: "rgba(21,191,255,0.1)" },
@@ -193,11 +185,12 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
   const retryProgressRecord = async (
     record: CrawlProgressRecord,
     proxyMode: "auto" | "none" | "proxy" = "auto",
+    douyinBrowserMethod: "method1" | "method2" = "method1",
   ) => {
     setRetryingRecordIds((current) => new Set(current).add(record.id))
     setOpenRetryMenuId(null)
     try {
-      await api.retryCrawl(record.platform, record.keyword, record.crawl_count, proxyMode)
+      await api.retryCrawl(record.platform, record.keyword, record.crawl_count, proxyMode, douyinBrowserMethod)
       const p = await api.getCrawlProgress()
       setProgress(p)
       showToast({ type: "success", message: `${record.keyword} 重试完成` })
@@ -536,28 +529,79 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
                           background: "var(--surface)",
                           boxShadow: "var(--shadow-md)",
                         }}>
-                          <button
-                            type="button"
-                            className="btn btn-xs btn-outline"
-                            disabled={retryDisabled}
-                            title={r.status === "running" ? "当前项目正在采集中" : "重试当前采集项目"}
-                            onClick={async () => {
-                              try {
-                                await retryProgressRecord(r)
-                              } catch {}
-                            }}
-                            style={{
-                              width: "100%",
-                              justifyContent: "flex-start",
-                              color: "var(--red)",
-                              borderColor: "var(--red)",
-                              fontSize: 11,
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {retrying ? <Loader2 className="spinner" size={11} style={{ marginRight: 3 }} /> : <RotateCw size={11} style={{ marginRight: 3 }} />}
-                            {retrying ? "重试中" : "重试"}
-                          </button>
+                          {!isDouyinProgressRecord(r) && (
+                            <button
+                              type="button"
+                              className="btn btn-xs btn-outline"
+                              disabled={retryDisabled}
+                              title={r.status === "running" ? "当前项目正在采集中" : "重试当前采集项目"}
+                              onClick={async () => {
+                                try {
+                                  await retryProgressRecord(r)
+                                } catch {}
+                              }}
+                              style={{
+                                width: "100%",
+                                justifyContent: "flex-start",
+                                color: "var(--red)",
+                                borderColor: "var(--red)",
+                                fontSize: 11,
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {retrying ? <Loader2 className="spinner" size={11} style={{ marginRight: 3 }} /> : <RotateCw size={11} style={{ marginRight: 3 }} />}
+                              {retrying ? "重试中" : "重试"}
+                            </button>
+                          )}
+
+                          {isDouyinProgressRecord(r) && (
+                            <>
+                              <button
+                                type="button"
+                                className="btn btn-xs btn-outline"
+                                disabled={retryDisabled}
+                                title="使用方法一重新抓取"
+                                onClick={async () => {
+                                  try {
+                                    await retryProgressRecord(r, "auto", "method1")
+                                  } catch {}
+                                }}
+                                style={{
+                                  width: "100%",
+                                  justifyContent: "flex-start",
+                                  color: "var(--red)",
+                                  borderColor: "var(--red)",
+                                  fontSize: 11,
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {retrying ? <Loader2 className="spinner" size={11} style={{ marginRight: 3 }} /> : <RotateCw size={11} style={{ marginRight: 3 }} />}
+                                方法一
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-xs btn-outline"
+                                disabled={retryDisabled}
+                                title="使用方法二重新抓取"
+                                onClick={async () => {
+                                  try {
+                                    await retryProgressRecord(r, "auto", "method2")
+                                  } catch {}
+                                }}
+                                style={{
+                                  width: "100%",
+                                  justifyContent: "flex-start",
+                                  color: "var(--primary)",
+                                  borderColor: "var(--primary)",
+                                  fontSize: 11,
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                <RotateCw size={11} style={{ marginRight: 3 }} />
+                                方法二
+                              </button>
+                            </>
+                          )}
 
                           {isTapTapProgressRecord(r) && (
                             <>

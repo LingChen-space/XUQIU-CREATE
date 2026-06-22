@@ -58,10 +58,22 @@ export const api = {
 
   // 采集进度
   getCrawlProgress: () => request<CrawlProgress>('/monitor/crawl/progress'),
-  retryCrawl: (platform: string, keyword: string, crawlCount = 50, proxyMode: "auto" | "none" | "proxy" = "auto") =>
+  retryCrawl: (
+    platform: string,
+    keyword: string,
+    crawlCount = 50,
+    proxyMode: "auto" | "none" | "proxy" = "auto",
+    douyinBrowserMethod: "method1" | "method2" = "method1",
+  ) =>
     request<any>('/monitor/crawl/retry', {
       method: 'POST',
-      body: JSON.stringify({ platform, keyword, crawl_count: crawlCount, proxy_mode: proxyMode }),
+      body: JSON.stringify({
+        platform,
+        keyword,
+        crawl_count: crawlCount,
+        proxy_mode: proxyMode,
+        douyin_browser_method: douyinBrowserMethod,
+      }),
     }),
   startDouyinLogin: () => request<any>('/monitor/douyin/login', { method: 'POST' }),
   getDouyinLoginStatus: () => request<any>('/monitor/douyin/login'),

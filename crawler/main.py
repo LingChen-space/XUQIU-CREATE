@@ -35,6 +35,7 @@ HEYBOX_RANGE_VALUES = ("7d", "30d", "180d", "360d")
 HEYBOX_SORT_VALUES = ("default", "create_date", "award_num", "comment_num")
 TAPTAP_SORT_VALUES = ("default", "update_time,desc", "commented_time,desc")
 DOUYIN_SORT_VALUES = ("default", "latest", "most_like")
+DOUYIN_BROWSER_METHOD_VALUES = ("method1", "method2")
 
 
 def write_json(path: Path, payload: object) -> None:
@@ -281,7 +282,7 @@ def save_douyin_cookies(cookies: list[dict], path: Path = DOUYIN_COOKIE_PATH) ->
     print(f"[Douyin] Saved session cookies to {path}", file=sys.stderr)
 
 
-def login_douyin() -> None:
+def login_douyin(browser_method: str = "method1") -> None:
     from app.douyin.browser_core import (
         DOUYIN_SCREEN,
         DOUYIN_WWW_URL,
@@ -293,6 +294,7 @@ def login_douyin() -> None:
     with start_douyin_browser_session(
         DOUYIN_WWW_URL,
         headless=False,
+        browser_method=browser_method,
         context_kwargs={
             "viewport": {"width": 1440, "height": 1000},
             "screen": DOUYIN_SCREEN,
@@ -302,7 +304,7 @@ def login_douyin() -> None:
         save_douyin_cookies(session.get_cookies())
 
 
-def export_douyin(keyword: str, target_count: int, sort: str, headless: bool) -> list[dict]:
+def export_douyin(keyword: str, target_count: int, sort: str, headless: bool, browser_method: str) -> list[dict]:
     from app.douyin.fetcher import (
         DouyinAntiSpamException,
         get_filter_sort_type,
@@ -317,6 +319,7 @@ def export_douyin(keyword: str, target_count: int, sort: str, headless: bool) ->
                 sort_type=get_filter_sort_type(sort),
                 limit=target_count,
                 headless=headless,
+                browser_method=browser_method,
             )
         )
     except DouyinAntiSpamException as exc:
@@ -422,6 +425,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run Douyin search browser in headless mode. Not supported with --douyin-login.",
     )
+    douyin_parser.add_argument(
+        "--browser-method",
+        default="method1",
+        choices=DOUYIN_BROWSER_METHOD_VALUES,
+        help="Douyin browser method. Defaults to method1.",
+    )
 
     return parser
 
@@ -456,15 +465,17 @@ def main() -> None:
         return
 
     if args.platform == "douyin":
+        if args.browser_method not in DOUYIN_BROWSER_METHOD_VALUES:
+            raise ValueError("--browser-method must be one of: method1, method2.")
         if args.douyin_login:
             if args.headless:
                 raise ValueError("--douyin-login requires a visible browser; remove --headless.")
-            login_douyin()
+            login_douyin(args.browser_method)
             return
 
         if args.count <= 0:
             raise ValueError("--count must be a positive integer.")
-        export_douyin(args.keyword, args.count, args.sort, args.headless)
+        export_douyin(args.keyword, args.count, args.sort, args.headless, args.browser_method)
         return
 
 
