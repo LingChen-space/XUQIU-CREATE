@@ -253,6 +253,11 @@ class ExternalMonitorSyncTest(unittest.TestCase):
         self.assertEqual(calls[0]["data"]["time"], 1700000000)
         self.assertEqual(calls[0]["data"]["sign"], "4639dc588670101013c09d854e44d8c6")
 
+    def test_api_client_defaults_to_official_production_url(self):
+        client = TapKbApiClient()
+
+        self.assertEqual(client.api_url, "http://news.4399.com/app/comm/tap_version2/api.php")
+
 
 async def run_sync(client: TapKbExportClient) -> dict:
     async with TestSession() as session:

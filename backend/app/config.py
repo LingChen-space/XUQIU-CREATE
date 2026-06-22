@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     monitor_api_base: str = "http://127.0.0.1:8001/api/monitor"
 
     # Tap + 快爆论坛监控后台标准导出
-    tap_kb_api_url: str = "http://news.4399swf.com/app/comm/tap_version2/api.php"
+    tap_kb_api_url: str = "http://news.4399.com/app/comm/tap_version2/api.php"
     tap_kb_api_secret: str = "a7f3c2e1b9d4f8e0a2c6b1d5e9f3a7c4"
     tap_kb_content_export_url: str = ""
     tap_kb_config_export_url: str = ""
