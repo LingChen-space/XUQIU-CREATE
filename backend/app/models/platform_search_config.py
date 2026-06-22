@@ -35,6 +35,22 @@ class PlatformSearchConfig(Base):
         String(512), nullable=True, default=None,
         comment="代理地址（TapTap 风控时使用）"
     )
+    source_key: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="manual", server_default="manual",
+        comment="配置来源: manual/tap_kb_forum"
+    )
+    external_group: Mapped[str] = mapped_column(
+        String(128), nullable=False, default="", server_default="",
+        comment="外部后台分组"
+    )
+    external_id: Mapped[str] = mapped_column(
+        String(128), nullable=False, default="", server_default="",
+        comment="外部后台配置ID"
+    )
+    last_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, default=None,
+        comment="外部配置最近同步时间"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now()
     )

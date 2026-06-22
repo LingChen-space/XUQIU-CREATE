@@ -42,5 +42,22 @@ async def init_db():
             await conn.run_sync(lambda c: c.exec_driver_sql("ALTER TABLE crawl_progress ADD COLUMN result_detail TEXT"))
         except Exception:
             pass
+        try:
+            await conn.run_sync(lambda c: c.exec_driver_sql("ALTER TABLE platform_search_configs ADD COLUMN source_key VARCHAR(64) NOT NULL DEFAULT 'manual'"))
+        except Exception:
+            pass
+        try:
+            await conn.run_sync(lambda c: c.exec_driver_sql("ALTER TABLE platform_search_configs ADD COLUMN external_group VARCHAR(128) NOT NULL DEFAULT ''"))
+        except Exception:
+            pass
+        try:
+            await conn.run_sync(lambda c: c.exec_driver_sql("ALTER TABLE platform_search_configs ADD COLUMN external_id VARCHAR(128) NOT NULL DEFAULT ''"))
+        except Exception:
+            pass
+        try:
+            await conn.run_sync(lambda c: c.exec_driver_sql("ALTER TABLE platform_search_configs ADD COLUMN last_synced_at DATETIME"))
+        except Exception:
+            pass
         await conn.run_sync(lambda c: c.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_platform_contents_source_id ON platform_contents (source_id)"))
         await conn.run_sync(lambda c: c.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_platform_contents_platform_source_id ON platform_contents (platform, source_id)"))
+        await conn.run_sync(lambda c: c.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_platform_search_configs_source_external ON platform_search_configs (source_key, external_id)"))

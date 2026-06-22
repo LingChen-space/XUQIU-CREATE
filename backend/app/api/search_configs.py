@@ -14,6 +14,7 @@ router = APIRouter(prefix="/api/search-configs", tags=["search-configs"])
 PLATFORM_LABELS: dict[str, str] = {
     "douyin": "抖音",
     "taptap": "TapTap",
+    "kuaibao_forum": "快爆论坛",
     "xiaoheihe": "小黑盒",
     "bilibili": "B站",
     "nga": "NGA",
@@ -31,6 +32,10 @@ def _to_out(cfg: PlatformSearchConfig) -> SearchConfigOut:
         enabled=cfg.enabled,
         crawl_count=cfg.crawl_count,
         proxy_url=cfg.proxy_url,
+        source_key=getattr(cfg, "source_key", "manual") or "manual",
+        external_group=getattr(cfg, "external_group", "") or "",
+        external_id=getattr(cfg, "external_id", "") or "",
+        last_synced_at=getattr(cfg, "last_synced_at", None),
         created_at=cfg.created_at,
         updated_at=cfg.updated_at,
     )
@@ -65,6 +70,7 @@ async def create_config(
         select(PlatformSearchConfig).where(
             PlatformSearchConfig.platform == payload.platform,
             PlatformSearchConfig.game_id.is_(None),
+            PlatformSearchConfig.source_key == "manual",
         )
     )
     if existing.scalar():
@@ -76,6 +82,7 @@ async def create_config(
         enabled=payload.enabled,
         crawl_count=payload.crawl_count,
         proxy_url=payload.proxy_url or None,
+        source_key="manual",
     )
     db.add(cfg)
     await db.commit()

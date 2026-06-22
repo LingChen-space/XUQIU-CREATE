@@ -13,6 +13,7 @@ from app.config import settings
 from app.database import async_session
 from app.models.game import Game, GameStatus
 from app.services.data_adapter import DataAdapter
+from app.services.external_monitor_sync import TapKbForumSyncService
 from app.services.signal_engine import SignalEngine
 from app.services.llm_pipeline import LLMPipeline
 from app.services.report_generator import ReportGenerator
@@ -61,10 +62,15 @@ async def run_daily_pipeline(force_recrawl: bool = False):
                         "combos_total": 0,
                         "force_recrawl": force_recrawl,
                     },
+                    "external_sync": None,
                     "signals_count": 0,
                     "demands_count": 0,
                     "report_id": None,
                 }
+
+            # --- Step 0: 外部监控后台同步 ---
+            external_sync = await TapKbForumSyncService(session).sync(days=30, force=force_recrawl)
+            logger.info(f"[DailyPipeline] 外部同步完成 - {external_sync.get('message', '')}")
 
             count = await adapter.ingest_contents(game_ids, force_recrawl=force_recrawl)
             logger.info(f"[DailyPipeline] 数据接入完成 - {count} 条内容")
@@ -87,6 +93,7 @@ async def run_daily_pipeline(force_recrawl: bool = False):
                 "ok": True,
                 "status": "completed",
                 "message": "管线执行完成",
+                "external_sync": external_sync,
                 "ingest": adapter.last_ingest_result,
                 "signals_count": len(signals),
                 "demands_count": len(demands),
@@ -100,6 +107,7 @@ async def run_daily_pipeline(force_recrawl: bool = False):
                 "ok": False,
                 "status": "failed",
                 "message": str(e),
+                "external_sync": None,
                 "ingest": {
                     "status": "failed",
                     "message": "管线执行失败，未能确认采集状态。",

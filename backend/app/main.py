@@ -21,6 +21,7 @@ from app.api.reports import router as reports_router
 from app.api.dashboard import router as dashboard_router
 from app.api.search_configs import router as search_configs_router
 from app.api.monitor import router as monitor_router
+from app.api.external_monitors import router as external_monitors_router
 
 from app.api.contents import router as contents_router
 
@@ -89,6 +90,7 @@ app.include_router(reports_router)
 app.include_router(dashboard_router)
 app.include_router(search_configs_router)
 app.include_router(monitor_router)
+app.include_router(external_monitors_router)
 
 app.include_router(contents_router)
 

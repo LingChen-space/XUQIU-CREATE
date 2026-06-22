@@ -1,6 +1,6 @@
 import type { HistoryLeaderboardOut } from '../types'
 import type { MonitorContentList, ContentStats } from '../types'
-import type { CrawlProgress, PipelineRunResult } from '../types'
+import type { CrawlProgress, PipelineRunResult, TapKbSyncStatus } from '../types'
 
 const BASE = '/api'
 
@@ -65,4 +65,10 @@ export const api = {
     }),
   startDouyinLogin: () => request<any>('/monitor/douyin/login', { method: 'POST' }),
   getDouyinLoginStatus: () => request<any>('/monitor/douyin/login'),
+  syncTapKbForum: (options: { days?: number; force?: boolean } = {}) =>
+    request<TapKbSyncStatus>('/external-monitors/tap-kb/sync', {
+      method: 'POST',
+      body: JSON.stringify({ days: options.days ?? 30, force: options.force ?? false }),
+    }),
+  getTapKbForumStatus: () => request<TapKbSyncStatus>('/external-monitors/tap-kb/status'),
 }

@@ -15,7 +15,7 @@ class SearchConfigCreate(BaseModel):
     @field_validator("platform")
     @classmethod
     def validate_platform(cls, v: str) -> str:
-        allowed = ["douyin", "taptap", "xiaoheihe", "bilibili", "nga", "weibo", "tieba"]
+        allowed = ["douyin", "taptap", "kuaibao_forum", "xiaoheihe", "bilibili", "nga", "weibo", "tieba"]
         if v not in allowed:
             raise ValueError(f"不支持的平台: {v}")
         return v
@@ -55,6 +55,10 @@ class SearchConfigOut(BaseModel):
     enabled: bool
     crawl_count: int
     proxy_url: str | None = None
+    source_key: str = "manual"
+    external_group: str = ""
+    external_id: str = ""
+    last_synced_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

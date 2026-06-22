@@ -146,6 +146,10 @@ export interface SearchConfig {
   enabled: boolean
   crawl_count: number
   proxy_url: string | null
+  source_key: string
+  external_group: string
+  external_id: string
+  last_synced_at: string | null
   created_at: string
   updated_at: string
 }
@@ -166,6 +170,7 @@ export interface MonitorContent {
   hot_score: number
   published_at: string
   collected_at: string
+  source_key: string
 }
 
 export interface MonitorContentList {
@@ -179,7 +184,27 @@ export interface ContentStats {
   total: number
   days: number
   by_platform: Record<string, number>
+  by_source: Record<string, number>
   by_date: { date: string; count: number }[]
+}
+
+export interface ExternalSyncStats {
+  fetched: number
+  inserted?: number
+  duplicates?: number
+  unmatched_games?: number
+  invalid?: number
+  upserted?: number
+  skipped?: number
+}
+
+export interface TapKbSyncStatus {
+  source_key: "tap_kb_forum"
+  status: "idle" | "not_configured" | "completed" | "failed"
+  message: string
+  contents: ExternalSyncStats
+  configs: ExternalSyncStats
+  synced_at: string | null
 }
 
 export interface CrawlProgressReason {
@@ -233,6 +258,7 @@ export interface PipelineRunResult {
   ok: boolean
   status: "completed" | "skipped" | "failed"
   message: string
+  external_sync?: TapKbSyncStatus | null
   ingest: PipelineIngestResult
   signals_count: number
   demands_count: number

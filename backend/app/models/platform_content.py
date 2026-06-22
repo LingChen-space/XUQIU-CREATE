@@ -13,6 +13,7 @@ class ContentPlatform(str, enum.Enum):
     bilibili = "B站"
     douyin = "抖音"
     taptap = "TapTap"
+    kuaibao_forum = "快爆论坛"
     xiaoheihe = "小黑盒"
     nga = "NGA"
     weibo = "微博"

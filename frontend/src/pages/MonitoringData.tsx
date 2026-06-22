@@ -10,11 +10,17 @@ const PLATFORM_MAP: Record<string, { label: string; color: string; bg: string }>
   "B站": { label: "B站", color: "#fb7299", bg: "rgba(251,114,153,0.1)" },
   "抖音": { label: "抖音", color: "#fe2c55", bg: "rgba(254,44,85,0.1)" },
   "TapTap": { label: "TapTap", color: "#15bfff", bg: "rgba(21,191,255,0.1)" },
+  "快爆论坛": { label: "快爆论坛", color: "#2563eb", bg: "rgba(37,99,235,0.1)" },
   "小黑盒": { label: "小黑盒", color: "#00c091", bg: "rgba(0,192,145,0.1)" },
   "NGA": { label: "NGA", color: "#f4a460", bg: "rgba(244,164,96,0.1)" },
   "微博": { label: "微博", color: "#e6162d", bg: "rgba(230,22,45,0.1)" },
   "贴吧": { label: "贴吧", color: "#3385ff", bg: "rgba(51,133,255,0.1)" },
   "其他": { label: "其他", color: "#888", bg: "rgba(136,136,136,0.1)" },
+}
+
+const SOURCE_MAP: Record<string, { label: string; color: string; bg: string }> = {
+  local: { label: "现有采集", color: "#64748b", bg: "rgba(100,116,139,0.1)" },
+  tap_kb_forum: { label: "Tap+快爆后台", color: "#2563eb", bg: "rgba(37,99,235,0.1)" },
 }
 
 const CONTENT_TYPE_MAP: Record<string, string> = {
@@ -31,6 +37,7 @@ export default function MonitoringData() {
   // Filters
   const [search, setSearch] = useState("")
   const [platformFilter, setPlatformFilter] = useState("全部")
+  const [sourceFilter, setSourceFilter] = useState("全部")
   const [daysFilter, setDaysFilter] = useState(7)
   const [page, setPage] = useState(0)
   const pageSize = 50
@@ -44,6 +51,7 @@ export default function MonitoringData() {
         offset: String(page * pageSize),
       }
       if (platformFilter !== "全部") params.platform = platformFilter
+      if (sourceFilter !== "全部") params.source_key = sourceFilter
       if (search.trim()) params.search = search.trim()
 
       const result = await api.getContents(params)
@@ -62,7 +70,7 @@ export default function MonitoringData() {
     } catch {}
   }
 
-  useEffect(() => { fetchContents(); fetchStats() }, [page, platformFilter, daysFilter])
+  useEffect(() => { fetchContents(); fetchStats() }, [page, platformFilter, sourceFilter, daysFilter])
   useEffect(() => {
     const t = setTimeout(() => { setPage(0); fetchContents() }, 400)
     return () => clearTimeout(t)
@@ -144,6 +152,19 @@ export default function MonitoringData() {
               />
             )
           })}
+          {Object.entries(SOURCE_MAP).map(([key, cfg]) => {
+            const count = stats.by_source?.[key] || 0
+            if (count === 0) return null
+            return (
+              <StatCard
+                key={key}
+                icon={<Database size={16} />}
+                label={cfg.label}
+                value={String(count)}
+                color={cfg.color}
+              />
+            )
+          })}
         </div>
       )}
 
@@ -178,6 +199,22 @@ export default function MonitoringData() {
           >
             <option value="全部">全部平台</option>
             {Object.entries(PLATFORM_MAP).map(([key, cfg]) => (
+              <option key={key} value={key}>{cfg.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ width: 1, height: 24, background: "var(--border)" }} />
+
+        {/* Source filter */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <Database size={14} color="var(--text-muted)" />
+          <select
+            value={sourceFilter} onChange={(e) => { setSourceFilter(e.target.value); setPage(0) }}
+            className="form-input" style={{ fontSize: 12, padding: "6px 28px 6px 10px" }}
+          >
+            <option value="全部">全部来源</option>
+            {Object.entries(SOURCE_MAP).map(([key, cfg]) => (
               <option key={key} value={key}>{cfg.label}</option>
             ))}
           </select>
@@ -259,6 +296,16 @@ export default function MonitoringData() {
                             }}>
                               {c.body}
                             </p>
+                          )}
+                          {c.source_key && c.source_key !== "local" && (
+                            <span style={{
+                              display: "inline-block", marginTop: 4, padding: "1px 6px",
+                              borderRadius: 4, fontSize: 10,
+                              background: SOURCE_MAP[c.source_key]?.bg || "#f3f4f6",
+                              color: SOURCE_MAP[c.source_key]?.color || "var(--text-muted)",
+                            }}>
+                              {SOURCE_MAP[c.source_key]?.label || c.source_key}
+                            </span>
                           )}
                         </div>
                       </td>

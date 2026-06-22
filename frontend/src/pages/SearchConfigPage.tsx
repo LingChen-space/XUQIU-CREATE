@@ -123,6 +123,7 @@ export default function SearchConfigPage() {
   const getPlatformLabel = (key: string) => platforms.find(p => p.key === key)?.label || key
   const enabledCount = configs.filter(c => c.enabled).length
   const isTapTapPlatform = (platform: string) => platform.trim().toLowerCase() === "taptap"
+  const getSourceLabel = (cfg: SearchConfig) => cfg.source_key === "tap_kb_forum" ? "Tap+快爆后台" : "手工"
 
   if (loading) {
     return (
@@ -296,6 +297,17 @@ export default function SearchConfigPage() {
                         fontSize: 12, fontWeight: 600,
                       }}>
                         {pltLabel}
+                      </span>
+                      <span style={{
+                        display: "inline-block",
+                        marginLeft: 6,
+                        padding: "2px 6px",
+                        borderRadius: 4,
+                        background: cfg.source_key === "tap_kb_forum" ? "rgba(37,99,235,0.1)" : "#f3f4f6",
+                        color: cfg.source_key === "tap_kb_forum" ? "#2563eb" : "var(--text-muted)",
+                        fontSize: 10,
+                      }}>
+                        {getSourceLabel(cfg)}
                       </span>
                     </td>
                     <td>

@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     # 监控采集微服务（本机）
     monitor_api_base: str = "http://127.0.0.1:8001/api/monitor"
 
+    # Tap + 快爆论坛监控后台标准导出
+    tap_kb_content_export_url: str = ""
+    tap_kb_config_export_url: str = ""
+    tap_kb_api_key: str = ""
+
     # LLM API（用户提供）
     llm_api_base: str = "https://api.openai.com/v1"
     llm_api_key: str = ""

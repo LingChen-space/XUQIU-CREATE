@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react"
-import { RefreshCw, Loader2, BarChart3, Gamepad2, TrendingUp, Zap, FileText, Plus, Brain, Target, Layers, RotateCw, ChevronDown, ChevronUp, CheckCircle, XCircle, Circle, LogIn, MoreHorizontal } from "lucide-react"
+import { RefreshCw, Loader2, BarChart3, Gamepad2, TrendingUp, Zap, FileText, Plus, Brain, Target, Layers, RotateCw, ChevronDown, ChevronUp, CheckCircle, XCircle, Circle, LogIn, MoreHorizontal, Database } from "lucide-react"
 import { api } from "../api/client"
-import type { DashboardSummary, DemandCard, Game, CrawlProgress, CrawlProgressRecord } from "../types"
+import type { DashboardSummary, DemandCard, Game, CrawlProgress, CrawlProgressRecord, TapKbSyncStatus } from "../types"
 import DemandCardView from "../components/DemandCard"
 import { DEMAND_CATEGORY_LABELS, groupDemandsByGame } from "../utils/demandGrouping"
 
@@ -77,6 +77,7 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
   const [loading, setLoading] = useState(true)
   const [pipelineLoading, setPipelineLoading] = useState(false)
   const [progress, setProgress] = useState<CrawlProgress | null>(null)
+  const [externalStatus, setExternalStatus] = useState<TapKbSyncStatus | null>(null)
   const [progressLoading, setProgressLoading] = useState(false)
   const [progressExpanded, setProgressExpanded] = useState(true)
   const [crawlNotice, setCrawlNotice] = useState<string | null>(null)
@@ -90,9 +91,14 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
   const fetchData = async (showLoader = true) => {
     if (showLoader) setLoading(true)
     try {
-      const [summary, gameList] = await Promise.all([api.getDashboardSummary(), api.getGames()])
+      const [summary, gameList, tapKbStatus] = await Promise.all([
+        api.getDashboardSummary(),
+        api.getGames(),
+        api.getTapKbForumStatus().catch(() => null),
+      ])
       setData(summary)
       setGames(gameList)
+      setExternalStatus(tapKbStatus)
       const active = gameList.filter((g: Game) => g.status !== "已停运")
       onGameCountChange(active.length)
       onDemandCountChange(summary.total_demands_today)
@@ -153,6 +159,7 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
     setCrawlNotice(null)
     try {
       const result = await api.triggerPipeline({ force_recrawl: forceRecrawl })
+      if (result.external_sync) setExternalStatus(result.external_sync)
       if (forceRecrawl) {
         setCrawlNotice("已忽略今日完成状态并重新抓取，入库仍会自动去重。")
       } else if (result.ingest?.status === "skipped_completed") {
@@ -299,6 +306,31 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
           <div className="metric-sub" style={{ textAlign: "center" }}>每日 06:00 自动执行</div>
         </div>
       </div>
+
+      {externalStatus && (
+        <div style={{
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--radius-lg)",
+          padding: "12px 16px",
+          marginBottom: 16,
+          boxShadow: "var(--shadow-sm)",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          flexWrap: "wrap",
+        }}>
+          <Database size={15} color={externalStatus.status === "failed" ? "var(--red)" : "var(--primary)"} />
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Tap+快爆论坛同步</span>
+          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{externalStatus.message}</span>
+          <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: "auto" }}>
+            入库 {externalStatus.contents.inserted || 0} 条
+            {typeof externalStatus.contents.duplicates === "number" && ` · 重复 ${externalStatus.contents.duplicates} 条`}
+            {typeof externalStatus.contents.unmatched_games === "number" && externalStatus.contents.unmatched_games > 0 && ` · 未匹配游戏 ${externalStatus.contents.unmatched_games} 条`}
+            {typeof externalStatus.configs.upserted === "number" && ` · 配置 ${externalStatus.configs.upserted} 条`}
+          </span>
+        </div>
+      )}
 
       {/* Crawl progress panel */}
       {progress && progress.records.length > 0 && (
