@@ -20,6 +20,9 @@ if (-not $NodeExe) {
     throw "node.exe was not found."
 }
 
+# Some shells expose both Path and PATH, which makes Start-Process fail on Windows.
+Remove-Item Env:PATH -ErrorAction SilentlyContinue
+
 function Test-PortListening {
     param([int]$Port)
 

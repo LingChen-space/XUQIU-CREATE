@@ -4,6 +4,7 @@ import asyncio
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -256,7 +257,36 @@ class ExternalMonitorSyncTest(unittest.TestCase):
     def test_api_client_defaults_to_official_production_url(self):
         client = TapKbApiClient()
 
-        self.assertEqual(client.api_url, "http://news.4399.com/app/comm/tap_version2/api.php")
+        self.assertEqual(client.api_url, "https://news.4399.com/app/comm/tap_version2/api.php")
+
+    def test_api_client_follows_official_host_redirects(self):
+        captured_kwargs: dict = {}
+
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"code": 200, "last_id": 0, "data": []}
+
+        class FakeHttpClient:
+            def __init__(self, **kwargs):
+                captured_kwargs.update(kwargs)
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return None
+
+            async def post(self, url: str, data: dict):
+                return FakeResponse()
+
+        with patch("app.services.external_monitor_sync.httpx.AsyncClient", FakeHttpClient):
+            client = TapKbApiClient(api_url="http://news.4399.com/app/comm/tap_version2/api.php", secret="secret")
+            asyncio.run(client._post_form(client.api_url, {"type": "tap"}))
+
+        self.assertIs(captured_kwargs.get("follow_redirects"), True)
 
 
 async def run_sync(client: TapKbExportClient) -> dict:

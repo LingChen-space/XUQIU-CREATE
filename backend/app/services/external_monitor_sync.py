@@ -174,7 +174,7 @@ class TapKbApiClient(TapKbExportClient):
     async def _post_form(self, url: str, data: dict) -> dict:
         if self.post_form:
             return await self.post_form(url, data)
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
             resp = await client.post(url, data=data)
             resp.raise_for_status()
             payload = resp.json()
