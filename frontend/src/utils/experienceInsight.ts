@@ -3,7 +3,7 @@ import type { DemandCard, DemandDetail, ExperienceServerInsight } from "../types
 type ExperienceDemand = DemandCard | DemandDetail
 
 export interface ExperienceInsightRow {
-  label: "更新内容" | "爆料内容" | "资格招募" | "当前节点"
+  label: "更新/爆料内容" | "资格招募" | "当前节点"
   value: string
   tone: string
   bg: string
@@ -22,14 +22,17 @@ export function getExperienceInsight(demand: ExperienceDemand): ExperienceServer
 
 export function getExperienceInsightRows(demand: ExperienceDemand): ExperienceInsightRow[] {
   const insight = getExperienceInsight(demand)
+  const contentParts = [insight.update_content, insight.leak_content].filter(
+    (value) => value && value !== "未发现更新内容" && value !== "未发现爆料内容"
+  )
+  const contentValue = contentParts.length > 0 ? contentParts.join(" · ") : "未发现更新/爆料内容"
   const recruitmentParts = [insight.recruitment_status]
   if (insight.recruitment_time && insight.recruitment_time !== "未发现明确时间") {
     recruitmentParts.push(insight.recruitment_time)
   }
 
   return [
-    { label: "更新内容", value: insight.update_content, tone: "#2563eb", bg: "var(--primary-light)" },
-    { label: "爆料内容", value: insight.leak_content, tone: "#7c3aed", bg: "var(--purple-light)" },
+    { label: "更新/爆料内容", value: contentValue, tone: "#2563eb", bg: "var(--primary-light)" },
     {
       label: "资格招募",
       value: recruitmentParts.join(" · "),
@@ -41,7 +44,7 @@ export function getExperienceInsightRows(demand: ExperienceDemand): ExperienceIn
 }
 
 export function getCompactExperienceInsight(demand: ExperienceDemand): string[] {
-  const missingPrefixes = ["未发现更新内容", "未发现爆料内容", "未发现资格招募"]
+  const missingPrefixes = ["未发现更新/爆料内容", "未发现资格招募"]
   return getExperienceInsightRows(demand)
     .filter((row) => !missingPrefixes.some((prefix) => row.value.startsWith(prefix)))
     .map((row) => `${row.label}：${row.value}`)

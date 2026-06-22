@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { BellRing, ExternalLink, Loader2, Clock, Gauge, Flag, Megaphone, RefreshCw, X } from "lucide-react"
+import { BellRing, ExternalLink, Loader2, Clock, Gauge, Flag, Megaphone, X } from "lucide-react"
 import { api } from "../api/client"
 import type { DemandCard, DemandDetail } from "../types"
 import RadarChart from "./RadarChart"
@@ -23,8 +23,7 @@ const getDemandDisplayTitle = (demand: DemandCard | DemandDetail) => {
 }
 
 const EXPERIENCE_ROW_ICONS = {
-  更新内容: RefreshCw,
-  爆料内容: Megaphone,
+  "更新/爆料内容": Megaphone,
   资格招募: BellRing,
   当前节点: Clock,
 }

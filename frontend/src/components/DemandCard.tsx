@@ -1,4 +1,4 @@
-import { BellRing, Clock, Gauge, Megaphone, RefreshCw } from "lucide-react"
+import { BellRing, Clock, Gauge, Megaphone } from "lucide-react"
 import type { DemandCard } from "../types"
 import { getDemandDisplayTitle } from "../utils/demandGrouping"
 import { getExperienceInsightRows } from "../utils/experienceInsight"
@@ -36,8 +36,7 @@ const CATEGORY_STYLE: Record<string, { label: string; bg: string; color: string 
 }
 
 const EXPERIENCE_ROW_ICONS = {
-  更新内容: RefreshCw,
-  爆料内容: Megaphone,
+  "更新/爆料内容": Megaphone,
   资格招募: BellRing,
   当前节点: Clock,
 }
