@@ -61,3 +61,4 @@ async def init_db():
         await conn.run_sync(lambda c: c.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_platform_contents_source_id ON platform_contents (source_id)"))
         await conn.run_sync(lambda c: c.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_platform_contents_platform_source_id ON platform_contents (platform, source_id)"))
         await conn.run_sync(lambda c: c.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_platform_search_configs_source_external ON platform_search_configs (source_key, external_id)"))
+        await conn.run_sync(lambda c: c.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_external_monitor_cursors_source_feed ON external_monitor_cursors (source_key, feed_type)"))

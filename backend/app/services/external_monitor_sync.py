@@ -1,17 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Tap + 快爆论坛外部监控后台同步。"""
+"""Tap + KuaiBao forum external monitor sync."""
 
+import hashlib
 import json
 import logging
+import time
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.models.external_monitor_cursor import ExternalMonitorCursor
 from app.models.game import Game
 from app.models.platform_content import ContentPlatform, ContentType, PlatformContent
 from app.models.platform_search_config import PlatformSearchConfig
@@ -21,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 SOURCE_KEY = "tap_kb_forum"
 SOURCE_LABEL = "Tap + 快爆论坛"
+FEED_TYPES = ("tap", "hykb")
+
 LAST_SYNC_STATUS: dict[str, Any] = {
     "source_key": SOURCE_KEY,
     "status": "idle",
@@ -37,6 +42,7 @@ LAST_SYNC_STATUS: dict[str, Any] = {
         "upserted": 0,
         "skipped": 0,
     },
+    "last_ids": {},
     "synced_at": None,
 }
 
@@ -131,81 +137,168 @@ def _extract_records(payload: Any, *keys: str) -> list[dict]:
 
 
 class TapKbExportClient:
-    """标准导出客户端。真实接口地址由环境变量配置。"""
-
-    def __init__(
-        self,
-        content_url: str | None = None,
-        config_url: str | None = None,
-        api_key: str | None = None,
-    ):
-        self.content_url = content_url if content_url is not None else settings.tap_kb_content_export_url
-        self.config_url = config_url if config_url is not None else settings.tap_kb_config_export_url
-        self.api_key = api_key if api_key is not None else settings.tap_kb_api_key
+    """Base client used by tests and protocol implementations."""
 
     @property
     def configured(self) -> bool:
-        if not hasattr(self, "content_url") and not hasattr(self, "config_url"):
-            return True
-        return bool(getattr(self, "content_url", "") or getattr(self, "config_url", ""))
+        return True
 
-    async def _get_json(self, url: str, params: dict | None = None) -> Any:
-        headers = {}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.get(url, params=params or {}, headers=headers)
-            resp.raise_for_status()
-            return resp.json()
-
-    async def fetch_contents(self, days: int) -> list[dict]:
-        if not self.content_url:
-            return []
-        payload = await self._get_json(self.content_url, {"days": days})
-        return _extract_records(payload, "contents", "items", "data", "list", "rows")
+    async def fetch_contents(self, days: int, last_ids: dict[str, int] | None = None):
+        del days, last_ids
+        return []
 
     async def fetch_configs(self) -> list[dict]:
-        if not self.config_url:
-            return []
-        payload = await self._get_json(self.config_url)
-        return _extract_records(payload, "configs", "items", "data", "list", "rows")
+        return []
+
+
+class TapKbApiClient(TapKbExportClient):
+    """Client for the signed tap_version2 api.php protocol."""
+
+    def __init__(
+        self,
+        api_url: str | None = None,
+        secret: str | None = None,
+        clock: Callable[[], int] | None = None,
+        post_form: Callable[[str, dict], Awaitable[dict]] | None = None,
+    ):
+        self.api_url = api_url if api_url is not None else settings.tap_kb_api_url
+        self.secret = secret if secret is not None else settings.tap_kb_api_secret
+        self.clock = clock or (lambda: int(time.time()))
+        self.post_form = post_form
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.api_url and self.secret)
+
+    async def _post_form(self, url: str, data: dict) -> dict:
+        if self.post_form:
+            return await self.post_form(url, data)
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(url, data=data)
+            resp.raise_for_status()
+            payload = resp.json()
+        if not isinstance(payload, dict):
+            raise RuntimeError("Tap+快爆接口返回格式不是 JSON 对象")
+        return payload
+
+    async def fetch_contents(self, days: int, last_ids: dict[str, int] | None = None) -> dict:
+        del days
+        last_ids = last_ids or {}
+        records: list[dict] = []
+        next_last_ids: dict[str, int] = {}
+
+        for feed_type, platform_label in (("tap", "TapTap"), ("hykb", "快爆论坛")):
+            current_time = int(self.clock())
+            data = {
+                "type": feed_type,
+                "time": current_time,
+                "sign": hashlib.md5(f"{current_time}{self.secret}".encode("utf-8")).hexdigest(),
+            }
+            previous_last_id = int(last_ids.get(feed_type, 0) or 0)
+            if previous_last_id > 0:
+                data["last_id"] = previous_last_id
+
+            payload = await self._post_form(self.api_url, data)
+            if int(payload.get("code", 0) or 0) != 200:
+                raise RuntimeError(f"Tap+快爆接口 {feed_type} 请求失败: {payload.get('msg') or payload}")
+
+            next_last_ids[feed_type] = _first_int(payload.get("last_id"))
+            for item in _extract_records(payload, "data", "items", "list", "rows"):
+                raw_id = _first_text(item.get("id"), item.get("external_id"))
+                if not raw_id:
+                    continue
+                records.append({
+                    "external_id": f"{feed_type}:{raw_id}",
+                    "platform": platform_label,
+                    "title": _first_text(item.get("title")),
+                    "url": _first_text(item.get("url")),
+                    "raw_feed_type": feed_type,
+                    "raw": item,
+                })
+
+        return {"records": records, "last_ids": next_last_ids}
 
 
 class TapKbForumSyncService:
-    """把 Tap + 快爆论坛标准导出同步到现有内容和配置表。"""
+    """Sync Tap + KuaiBao monitor data into local contents/configs."""
 
     def __init__(self, session: AsyncSession, client: TapKbExportClient | None = None):
         self.session = session
-        self.client = client or TapKbExportClient()
+        self.client = client or TapKbApiClient()
 
     async def sync(self, days: int = 30, force: bool = False) -> dict:
         if not self.client.configured:
             return self._set_status(
                 "not_configured",
-                "Tap + 快爆论坛导出接口未配置，已跳过外部同步。",
+                "Tap + 快爆论坛接口未配置，已跳过外部同步。",
                 self._empty_content_stats(),
                 self._empty_config_stats(),
+                {},
             )
 
         try:
-            raw_contents = await self.client.fetch_contents(days)
+            saved_last_ids = {} if force else await self._get_last_ids()
+            content_result = await self.client.fetch_contents(days, last_ids=saved_last_ids)
+            raw_contents, returned_last_ids = self._split_content_result(content_result)
             raw_configs = await self.client.fetch_configs()
             content_stats = await self._sync_contents(raw_contents, force=force)
             config_stats = await self._sync_configs(raw_configs)
+            if returned_last_ids:
+                await self._save_last_ids(returned_last_ids)
             return self._set_status(
                 "completed",
                 f"Tap + 快爆论坛同步完成：内容入库 {content_stats['inserted']} 条，配置同步 {config_stats['upserted']} 条。",
                 content_stats,
                 config_stats,
+                returned_last_ids,
             )
         except Exception as exc:
-            logger.exception("[TapKbSync] 同步失败")
+            logger.exception("[TapKbSync] sync failed")
             return self._set_status(
                 "failed",
                 str(exc)[:500],
                 self._empty_content_stats(),
                 self._empty_config_stats(),
+                {},
             )
+
+    @staticmethod
+    def _split_content_result(content_result: Any) -> tuple[list[dict], dict[str, int]]:
+        if isinstance(content_result, dict):
+            records = _extract_records(content_result, "records", "contents", "items", "data", "list", "rows")
+            raw_last_ids = content_result.get("last_ids") or {}
+            last_ids = {
+                str(feed_type): _first_int(last_id)
+                for feed_type, last_id in raw_last_ids.items()
+                if str(feed_type) in FEED_TYPES
+            } if isinstance(raw_last_ids, dict) else {}
+            return records, last_ids
+        return _extract_records(content_result, "records", "contents", "items", "data", "list", "rows"), {}
+
+    async def _get_last_ids(self) -> dict[str, int]:
+        result = await self.session.execute(
+            select(ExternalMonitorCursor).where(ExternalMonitorCursor.source_key == SOURCE_KEY)
+        )
+        return {cursor.feed_type: cursor.last_id for cursor in result.scalars().all()}
+
+    async def _save_last_ids(self, last_ids: dict[str, int]):
+        for feed_type, last_id in last_ids.items():
+            if feed_type not in FEED_TYPES:
+                continue
+            result = await self.session.execute(
+                select(ExternalMonitorCursor).where(
+                    ExternalMonitorCursor.source_key == SOURCE_KEY,
+                    ExternalMonitorCursor.feed_type == feed_type,
+                )
+            )
+            cursor = result.scalar()
+            if cursor is None:
+                cursor = ExternalMonitorCursor(source_key=SOURCE_KEY, feed_type=feed_type, last_id=last_id)
+                self.session.add(cursor)
+            else:
+                cursor.last_id = last_id
+                cursor.updated_at = datetime.now()
+        await self.session.commit()
 
     async def _sync_contents(self, records: list[dict], force: bool = False) -> dict:
         stats = self._empty_content_stats()
@@ -214,7 +307,8 @@ class TapKbForumSyncService:
             return stats
 
         result = await self.session.execute(select(Game))
-        games_by_name = {g.name.strip(): g for g in result.scalars().all() if g.name}
+        games = list(result.scalars().all())
+        games_by_name = {g.name.strip(): g for g in games if g.name}
 
         source_ids = {
             f"{SOURCE_KEY}:{_first_text(item.get('external_id'), item.get('id'))}"
@@ -222,7 +316,7 @@ class TapKbForumSyncService:
             if _first_text(item.get("external_id"), item.get("id"))
         }
         existing_source_ids: set[str] = set()
-        if source_ids and not force:
+        if source_ids:
             existing = await self.session.execute(
                 select(PlatformContent.source_id).where(PlatformContent.source_id.in_(source_ids))
             )
@@ -240,15 +334,14 @@ class TapKbForumSyncService:
                 continue
             seen.add(source_id)
 
-            game_name = _first_text(item.get("game_name"), item.get("game"))
-            game = games_by_name.get(game_name)
+            title = _first_text(item.get("title"))
+            body = _first_text(item.get("summary"), item.get("body"), item.get("description"))
+            game = self._match_game(_first_text(item.get("game_name"), item.get("game")), title, body, games_by_name, games)
             if game is None:
                 stats["unmatched_games"] += 1
                 continue
 
             platform_key, platform = _normalize_platform(item.get("platform"))
-            title = _first_text(item.get("title"))
-            body = _first_text(item.get("summary"), item.get("body"), item.get("description"))
             if not title and not body:
                 stats["invalid"] += 1
                 continue
@@ -280,13 +373,26 @@ class TapKbForumSyncService:
                     "platform_key": platform_key,
                     "external_id": external_id,
                     "keyword_hit": _first_text(item.get("keyword_hit"), item.get("keyword")),
-                    "raw": item,
+                    "raw_feed_type": _first_text(item.get("raw_feed_type")),
+                    "raw": item.get("raw") if isinstance(item.get("raw"), dict) else item,
                 }, ensure_ascii=False),
             ))
             stats["inserted"] += 1
 
         await self.session.commit()
         return stats
+
+    @staticmethod
+    def _match_game(game_name: str, title: str, body: str, games_by_name: dict[str, Game], games: list[Game]) -> Game | None:
+        if game_name and game_name in games_by_name:
+            return games_by_name[game_name]
+        text = f"{title} {body}"
+        matches = [game for game in games if game.name and game.name in text]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            return max(matches, key=lambda game: len(game.name))
+        return None
 
     async def _sync_configs(self, records: list[dict]) -> dict:
         stats = self._empty_config_stats()
@@ -337,7 +443,14 @@ class TapKbForumSyncService:
         await self.session.commit()
         return stats
 
-    def _set_status(self, status: str, message: str, content_stats: dict, config_stats: dict) -> dict:
+    def _set_status(
+        self,
+        status: str,
+        message: str,
+        content_stats: dict,
+        config_stats: dict,
+        last_ids: dict[str, int],
+    ) -> dict:
         global LAST_SYNC_STATUS
         LAST_SYNC_STATUS = {
             "source_key": SOURCE_KEY,
@@ -345,6 +458,7 @@ class TapKbForumSyncService:
             "message": message,
             "contents": content_stats,
             "configs": config_stats,
+            "last_ids": last_ids,
             "synced_at": datetime.now().isoformat(),
         }
         return LAST_SYNC_STATUS

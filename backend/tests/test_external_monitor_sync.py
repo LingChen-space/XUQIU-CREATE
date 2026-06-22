@@ -3,17 +3,20 @@
 import asyncio
 import tempfile
 import unittest
-from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.database import Base
+from app.models.external_monitor_cursor import ExternalMonitorCursor
 from app.models.game import Game, GameGenre, GameStatus
 from app.models.platform_content import ContentPlatform, PlatformContent
 from app.models.platform_search_config import PlatformSearchConfig
-from app.services.external_monitor_sync import TapKbExportClient, TapKbForumSyncService
+from app.services.external_monitor_sync import TapKbApiClient, TapKbExportClient, TapKbForumSyncService
+
+GAME_NAME = "\u4e09\u89d2\u6d32\u884c\u52a8"
+KB_FORUM = "\u5feb\u7206\u8bba\u575b"
 
 test_db_path = Path(tempfile.gettempdir()) / "req_gen_external_monitor_test.db"
 test_engine = create_async_engine(f"sqlite+aiosqlite:///{test_db_path}", echo=False)
@@ -25,11 +28,41 @@ class FakeTapKbClient(TapKbExportClient):
         self.contents = contents
         self.configs = configs
 
-    async def fetch_contents(self, days: int) -> list[dict]:
+    async def fetch_contents(self, days: int, last_ids: dict[str, int] | None = None):
         return self.contents
 
     async def fetch_configs(self) -> list[dict]:
         return self.configs
+
+
+class FakeIncrementalTapKbClient(TapKbExportClient):
+    def __init__(self):
+        self.requested_last_ids: dict[str, int] = {}
+
+    async def fetch_contents(self, days: int, last_ids: dict[str, int] | None = None):
+        self.requested_last_ids = last_ids or {}
+        return {
+            "records": [
+                {
+                    "external_id": "tap:50",
+                    "platform": "TapTap",
+                    "game_name": GAME_NAME,
+                    "title": f"{GAME_NAME}\u5361\u6218\u5907\u600e\u4e48\u641e",
+                    "url": "https://www.taptap.cn/moment/50",
+                },
+                {
+                    "external_id": "hykb:80",
+                    "platform": KB_FORUM,
+                    "game_name": GAME_NAME,
+                    "title": f"{GAME_NAME}\u5730\u56fe\u8d44\u6e90\u70b9\u6574\u7406",
+                    "url": "https://bbs.3839.com/thread-80.htm",
+                },
+            ],
+            "last_ids": {"tap": 100, "hykb": 120},
+        }
+
+    async def fetch_configs(self) -> list[dict]:
+        return []
 
 
 async def reset_tables():
@@ -53,7 +86,7 @@ async def create_game(name: str):
 class ExternalMonitorSyncTest(unittest.TestCase):
     def setUp(self):
         asyncio.run(reset_tables())
-        asyncio.run(create_game("三角洲行动"))
+        asyncio.run(create_game(GAME_NAME))
 
     def test_sync_maps_taptap_and_kuaibao_forum_content(self):
         client = FakeTapKbClient(
@@ -61,30 +94,30 @@ class ExternalMonitorSyncTest(unittest.TestCase):
                 {
                     "external_id": "tap-1",
                     "platform": "TapTap",
-                    "game_name": "三角洲行动",
-                    "title": "三角洲行动卡战备怎么搞",
-                    "summary": "战备值和配装工具求推荐",
+                    "game_name": GAME_NAME,
+                    "title": f"{GAME_NAME}\u5361\u6218\u5907\u600e\u4e48\u641e",
+                    "summary": "\u6218\u5907\u503c\u548c\u914d\u88c5\u5de5\u5177\u6c42\u63a8\u8350",
                     "url": "https://www.taptap.cn/moment/tap-1",
-                    "author": "玩家A",
+                    "author": "\u73a9\u5bb6A",
                     "like_count": 120,
                     "comment_count": 80,
                     "view_count": 1000,
                     "published_at": "2026-06-20 12:00:00",
-                    "keyword_hit": "卡战备",
+                    "keyword_hit": "\u5361\u6218\u5907",
                 },
                 {
                     "external_id": "kb-1",
-                    "platform": "快爆论坛",
-                    "game_name": "三角洲行动",
-                    "title": "三角洲行动地图资源点整理",
-                    "summary": "地图工具和路线标点需求很高",
+                    "platform": KB_FORUM,
+                    "game_name": GAME_NAME,
+                    "title": f"{GAME_NAME}\u5730\u56fe\u8d44\u6e90\u70b9\u6574\u7406",
+                    "summary": "\u5730\u56fe\u5de5\u5177\u548c\u8def\u7ebf\u6807\u70b9\u9700\u6c42\u5f88\u9ad8",
                     "url": "https://bbs.3839.com/thread/kb-1",
-                    "author": "玩家B",
+                    "author": "\u73a9\u5bb6B",
                     "like_count": 90,
                     "comment_count": 60,
                     "view_count": 800,
                     "published_at": "2026-06-20T13:00:00",
-                    "keyword_hit": "地图",
+                    "keyword_hit": "\u5730\u56fe",
                 },
             ],
             configs=[],
@@ -102,9 +135,9 @@ class ExternalMonitorSyncTest(unittest.TestCase):
         item = {
             "external_id": "tap-dup",
             "platform": "TapTap",
-            "game_name": "三角洲行动",
-            "title": "三角洲行动配装工具",
-            "summary": "战备和配装计算器",
+            "game_name": GAME_NAME,
+            "title": f"{GAME_NAME}\u914d\u88c5\u5de5\u5177",
+            "summary": "\u6218\u5907\u548c\u914d\u88c5\u8ba1\u7b97\u5668",
             "like_count": 50,
             "comment_count": 30,
             "published_at": "2026-06-20 12:00:00",
@@ -122,7 +155,7 @@ class ExternalMonitorSyncTest(unittest.TestCase):
             async with TestSession() as session:
                 session.add(PlatformSearchConfig(
                     platform="taptap",
-                    keywords="手工词",
+                    keywords="\u624b\u5de5\u8bcd",
                     enabled=True,
                     crawl_count=50,
                 ))
@@ -133,9 +166,9 @@ class ExternalMonitorSyncTest(unittest.TestCase):
             contents=[],
             configs=[
                 {
-                    "group_name": "攻略组",
+                    "group_name": "\u653b\u7565\u7ec4",
                     "platform": "TapTap",
-                    "keywords": "工具|地图|卡战备",
+                    "keywords": "\u5de5\u5177|\u5730\u56fe|\u5361\u6218\u5907",
                     "enabled": True,
                     "updated_at": "2026-06-20 12:00:00",
                 }
@@ -147,9 +180,50 @@ class ExternalMonitorSyncTest(unittest.TestCase):
         self.assertEqual(result["configs"]["upserted"], 1)
         configs = asyncio.run(fetch_configs())
         self.assertEqual(len(configs), 2)
-        self.assertIn("手工词", {c.keywords for c in configs})
+        self.assertIn("\u624b\u5de5\u8bcd", {c.keywords for c in configs})
         external = next(c for c in configs if c.source_key == "tap_kb_forum")
-        self.assertEqual(external.keywords, "工具,地图,卡战备")
+        self.assertEqual(external.keywords, "\u5de5\u5177,\u5730\u56fe,\u5361\u6218\u5907")
+
+    def test_sync_persists_returned_scan_last_id_not_matched_data_id(self):
+        client = FakeIncrementalTapKbClient()
+
+        result = asyncio.run(run_sync(client))
+
+        self.assertEqual(result["contents"]["inserted"], 2)
+        self.assertEqual(result["last_ids"], {"tap": 100, "hykb": 120})
+        cursors = asyncio.run(fetch_cursors())
+        self.assertEqual({c.feed_type: c.last_id for c in cursors}, {"tap": 100, "hykb": 120})
+
+    def test_sync_uses_saved_last_id_for_incremental_fetch(self):
+        asyncio.run(seed_cursor("tap", 100))
+        asyncio.run(seed_cursor("hykb", 120))
+        client = FakeIncrementalTapKbClient()
+
+        asyncio.run(run_sync(client))
+
+        self.assertEqual(client.requested_last_ids, {"tap": 100, "hykb": 120})
+
+    def test_api_client_posts_signed_tap_and_hykb_requests(self):
+        calls: list[dict] = []
+
+        async def post_form(url: str, data: dict):
+            calls.append({"url": url, "data": data})
+            return {"code": 200, "last_id": 100 if data["type"] == "tap" else 120, "data": []}
+
+        client = TapKbApiClient(
+            api_url="http://example.test/api.php",
+            secret="secret",
+            clock=lambda: 1700000000,
+            post_form=post_form,
+        )
+
+        result = asyncio.run(client.fetch_contents(days=30, last_ids={"tap": 88, "hykb": 99}))
+
+        self.assertEqual(result["last_ids"], {"tap": 100, "hykb": 120})
+        self.assertEqual([c["data"]["type"] for c in calls], ["tap", "hykb"])
+        self.assertEqual([c["data"]["last_id"] for c in calls], [88, 99])
+        self.assertEqual(calls[0]["data"]["time"], 1700000000)
+        self.assertEqual(calls[0]["data"]["sign"], "4639dc588670101013c09d854e44d8c6")
 
 
 async def run_sync(client: TapKbExportClient) -> dict:
@@ -168,6 +242,18 @@ async def fetch_configs() -> list[PlatformSearchConfig]:
     async with TestSession() as session:
         result = await session.execute(select(PlatformSearchConfig).order_by(PlatformSearchConfig.created_at))
         return list(result.scalars().all())
+
+
+async def fetch_cursors() -> list[ExternalMonitorCursor]:
+    async with TestSession() as session:
+        result = await session.execute(select(ExternalMonitorCursor).order_by(ExternalMonitorCursor.feed_type))
+        return list(result.scalars().all())
+
+
+async def seed_cursor(feed_type: str, last_id: int):
+    async with TestSession() as session:
+        session.add(ExternalMonitorCursor(source_key="tap_kb_forum", feed_type=feed_type, last_id=last_id))
+        await session.commit()
 
 
 if __name__ == "__main__":

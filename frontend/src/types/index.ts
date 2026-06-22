@@ -204,6 +204,7 @@ export interface TapKbSyncStatus {
   message: string
   contents: ExternalSyncStats
   configs: ExternalSyncStats
+  last_ids: Record<string, number>
   synced_at: string | null
 }
 
