@@ -65,6 +65,7 @@ export interface DemandDetail extends DemandCard {
 
 export interface DashboardSummary {
   today_date: string
+  today_analysis_completed: boolean
   total_demands_today: number
   top_demands: DemandCard[]
   trending_games: { id: string; name: string; genre: string; demand_count: number }[]

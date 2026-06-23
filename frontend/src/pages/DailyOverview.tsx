@@ -193,6 +193,10 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
   }
 
   const triggerPipeline = async (forceRecrawl = false) => {
+    if (!forceRecrawl && data?.today_analysis_completed) {
+      showToast({ type: "success", message: "今日已挖掘完成" })
+      return
+    }
     setPipelineLoading(true)
     setCrawlNotice(forceRecrawl ? "正在强制重新采集并分析需求..." : "正在启动采集和需求分析...")
     startPolling(3)
@@ -259,6 +263,7 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
   const activeGameNames = new Set(activeGames.map((g) => g.name))
   const hotDemands = data?.top_demands?.filter((d) => d.potential_score >= 70).length ?? 0
   const analysis = data?.daily_analysis
+  const todayAnalysisCompleted = data?.today_analysis_completed === true
   const visibleDemands = (data?.top_demands ?? [])
     .filter((d) => activeGameNames.has(d.game_name))
     .sort((a, b) => b.potential_score - a.potential_score)
@@ -372,11 +377,12 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
           <button
             className="btn btn-primary"
             onClick={() => triggerPipeline()}
-            disabled={pipelineLoading}
+            disabled={pipelineLoading || todayAnalysisCompleted}
+            title={todayAnalysisCompleted ? "今日已完成自动挖掘，如需重新采集请使用强制重新抓取" : undefined}
             style={{ width: "100%", justifyContent: "center", padding: "12px 0", fontSize: 14 }}
           >
-            {pipelineLoading ? <Loader2 className="spinner" size={16} /> : <RefreshCw size={16} />}
-            {pipelineLoading ? "分析中..." : "立即分析"}
+            {pipelineLoading ? <Loader2 className="spinner" size={16} /> : todayAnalysisCompleted ? <CheckCircle size={16} /> : <RefreshCw size={16} />}
+            {pipelineLoading ? "分析中..." : todayAnalysisCompleted ? "今日已挖掘完成" : "立即分析"}
           </button>
           <button
             className="btn btn-outline"
@@ -388,7 +394,7 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
             {pipelineLoading ? <Loader2 className="spinner" size={15} /> : <RotateCw size={15} />}
             强制重新抓取
           </button>
-          <div className="metric-sub" style={{ textAlign: "center" }}>每日 06:00 自动执行</div>
+          <div className="metric-sub" style={{ textAlign: "center" }}>{todayAnalysisCompleted ? "今日已挖掘完成" : "每日 06:00 自动执行"}</div>
         </div>
       </div>
 
@@ -942,9 +948,14 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
               <div className="empty-icon"><RefreshCw size={24} /></div>
               <p style={{ fontWeight: 500, marginBottom: 6 }}>暂无需求数据</p>
               <p style={{ fontSize: 13, marginBottom: 20 }}>点击上方「立即分析」按钮，或等待每日凌晨 6:00 自动执行分析管线。</p>
-              <button className="btn btn-primary" onClick={() => triggerPipeline()} disabled={pipelineLoading}>
-                {pipelineLoading ? <Loader2 className="spinner" size={16} /> : <RefreshCw size={16} />}
-                运行首次分析
+              <button
+                className="btn btn-primary"
+                onClick={() => triggerPipeline()}
+                disabled={pipelineLoading || todayAnalysisCompleted}
+                title={todayAnalysisCompleted ? "今日已完成自动挖掘，如需重新采集请使用强制重新抓取" : undefined}
+              >
+                {pipelineLoading ? <Loader2 className="spinner" size={16} /> : todayAnalysisCompleted ? <CheckCircle size={16} /> : <RefreshCw size={16} />}
+                {pipelineLoading ? "分析中..." : todayAnalysisCompleted ? "今日已挖掘完成" : "运行首次分析"}
               </button>
             </div>
           ) : (

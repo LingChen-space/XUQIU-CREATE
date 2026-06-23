@@ -80,12 +80,16 @@ async def get_dashboard_summary(db: AsyncSession = Depends(get_db)):
     report_result = await db.execute(report_stmt)
     report = report_result.scalar()
     report_summary = report.summary if report else ""
+    today_report_stmt = select(DailyReport.id).where(DailyReport.report_date == today).limit(1)
+    today_report_result = await db.execute(today_report_stmt)
+    today_analysis_completed = today_report_result.scalar() is not None
 
     # ── 每日总结分析 ──
     daily_analysis = _build_daily_analysis(today_demands)
 
     return DashboardSummary(
         today_date=today,
+        today_analysis_completed=today_analysis_completed,
         total_demands_today=len(today_demands),
         top_demands=top_cards,
         trending_games=trending_games,

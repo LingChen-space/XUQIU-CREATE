@@ -40,6 +40,7 @@ class DailySummaryAnalysis(BaseModel):
 class DashboardSummary(BaseModel):
     """看板首页概览。"""
     today_date: date
+    today_analysis_completed: bool = False
     total_demands_today: int
     top_demands: list[DemandCard]
     trending_games: list[dict]
