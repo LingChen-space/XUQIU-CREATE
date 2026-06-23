@@ -239,6 +239,37 @@ class ExternalMonitorSyncTest(unittest.TestCase):
         games = asyncio.run(fetch_games())
         self.assertIn(game_name, {g.name for g in games})
 
+    def test_sync_matches_existing_game_by_normalized_external_name(self):
+        asyncio.run(create_game("\u6d1b\u514b\u738b\u56fd\u4e16\u754c"))
+        asyncio.run(create_game("\u7edd\u533a\u96f6"))
+        client = FakeTapKbClient(
+            contents=[
+                {
+                    "external_id": "hykb-rock",
+                    "platform": KB_FORUM,
+                    "game_name": "\u6d1b\u514b\u738b\u56fd\uff1a\u4e16\u754c",
+                    "title": "\u5f02\u8272\u65e5\u8bb0\u5de5\u5177\u66f4\u65b0",
+                    "url": "https://bbs.3839.com/thread-rock.htm",
+                },
+                {
+                    "external_id": "hykb-zzz",
+                    "platform": KB_FORUM,
+                    "game_name": "\u7edd\u533a\u96f6(\u5b98\u670d)-2.8\u7248\u672c",
+                    "title": "\u4e3d\u90fd\u4fee\u847a\u6f2b\u8c08Vol.11",
+                    "url": "https://bbs.3839.com/thread-zzz.htm",
+                },
+            ],
+            configs=[],
+        )
+
+        result = asyncio.run(run_sync(client))
+
+        self.assertEqual(result["contents"]["inserted"], 2)
+        self.assertEqual(result["contents"]["created_games"], 0)
+        games = {game.id: game.name for game in asyncio.run(fetch_games())}
+        rows = asyncio.run(fetch_contents())
+        self.assertEqual({games[row.game_id] for row in rows}, {"\u6d1b\u514b\u738b\u56fd\u4e16\u754c", "\u7edd\u533a\u96f6"})
+
     def test_force_sync_updates_existing_external_content_fields(self):
         asyncio.run(seed_platform_content("tap_kb_forum:tap-update"))
         client = FakeTapKbClient(

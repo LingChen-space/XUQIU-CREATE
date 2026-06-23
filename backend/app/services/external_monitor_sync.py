@@ -139,19 +139,33 @@ def _extract_records(payload: Any, *keys: str) -> list[dict]:
     return []
 
 
+def _clean_external_game_name(name: str) -> str:
+    cleaned = _first_text(name)
+    if not cleaned:
+        return ""
+    cleaned = re.sub(r"[\(（][^\)）]*(?:\u5b98\u670d|\u6e20\u9053\u670d|\u7248\u672c)[^\)）]*[\)）]", "", cleaned)
+    cleaned = re.sub(r"[-_\u2010-\u2015\uff0d].*(?:\u7248\u672c|\u73a9\u6cd5\u6388\u6743)$", "", cleaned)
+    return cleaned.strip(" -_\u2010\u2011\u2012\u2013\u2014\u2015\uff0d")
+
+
+def _game_match_key(name: str) -> str:
+    cleaned = _clean_external_game_name(name)
+    return re.sub(r"[\s:：]+", "", cleaned).lower()
+
+
 def _infer_external_game_name(game_name: str, title: str, body: str) -> str:
-    explicit = _first_text(game_name)
+    explicit = _clean_external_game_name(_first_text(game_name))
     if explicit:
         return explicit
 
     text = f"{title} {body}"
     quoted = re.search(r"《([^》]{2,40})》", text)
     if quoted:
-        return quoted.group(1).strip()
+        return _clean_external_game_name(quoted.group(1))
 
     experience = re.search(r"([\u4e00-\u9fffA-Za-z0-9：:·]{2,30}体验服)", text)
     if experience:
-        return experience.group(1).strip()
+        return _clean_external_game_name(experience.group(1))
 
     return ""
 
@@ -515,8 +529,14 @@ class TapKbForumSyncService:
 
     @staticmethod
     def _match_game(game_name: str, title: str, body: str, games_by_name: dict[str, Game], games: list[Game]) -> Game | None:
-        if game_name and game_name in games_by_name:
-            return games_by_name[game_name]
+        if game_name:
+            cleaned_name = _clean_external_game_name(game_name)
+            if cleaned_name in games_by_name:
+                return games_by_name[cleaned_name]
+            game_key = _game_match_key(cleaned_name)
+            normalized_matches = [game for game in games if _game_match_key(game.name) == game_key]
+            if normalized_matches:
+                return max(normalized_matches, key=lambda game: len(game.name))
         text = f"{title} {body}"
         matches = [game for game in games if game.name and game.name in text]
         if len(matches) == 1:
