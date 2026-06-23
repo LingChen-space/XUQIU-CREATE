@@ -80,6 +80,23 @@ class DemandThemeAnalysisTest(unittest.TestCase):
         self.assertIn("体验服资格", qualification["tool_title"])
         self.assertGreaterEqual(qualification["potential_score"], 70)
 
+    def test_latest_redeem_code_mentions_create_welfare_code_demand(self):
+        analyses = self.pipeline._theme_analysis_from_contents(
+            SimpleNamespace(name="问剑长生", priority_weight=2),
+            [
+                content("问剑长生端午兑换码更新，仙长快来领密令", "最新口令码和礼包码有效期整理", 160, 82, 12000, "a"),
+                content("仙长端午安康，来领密令！", "兑换码、福利码入口和领取方式汇总", 120, 64, 9000, "b"),
+                content("问剑长生最新口令码合集", "今日新增礼包码，过期前记得兑换", 95, 40, 7000, "c"),
+            ],
+            {},
+        )
+
+        welfare = next(a for a in analyses if a["theme_key"] == "welfare_code")
+        self.assertEqual(welfare["tool_type_suggestion"], "资格/福利聚合")
+        self.assertTrue(any(keyword in welfare["tool_title"] for keyword in ["兑换码", "密令", "口令"]))
+        self.assertGreaterEqual(welfare["potential_score"], 80)
+        self.assertEqual(welfare["evidence_post_ids"], ["a", "b", "c"])
+
     def test_game_analysis_can_return_multiple_theme_demands(self):
         async def get_contents(game_id, window_date, limit=None):
             return [
