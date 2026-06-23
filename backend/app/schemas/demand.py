@@ -178,6 +178,7 @@ class DemandCard(BaseModel):
     demand_category: str = "tool"
     experience_focus: list[str] = []
     experience_insight: ExperienceServerInsight | None = None
+    launched_tool_matches: list[str] = []
     demand_date: date
     demand_level: str = ""
     created_at: datetime
@@ -202,6 +203,7 @@ class DemandHistoryCard(BaseModel):
     demand_category: str = "tool"
     experience_focus: list[str] = []
     experience_insight: ExperienceServerInsight | None = None
+    launched_tool_matches: list[str] = []
     demand_date: date
     created_at: datetime
     llm_reasoning: str = ""
@@ -229,6 +231,7 @@ class DemandDetail(BaseModel):
     demand_category: str = "tool"
     experience_focus: list[str] = []
     experience_insight: ExperienceServerInsight | None = None
+    launched_tool_matches: list[str] = []
     evidence_posts: list[EvidencePost] = []
     similar_past_demands: list[dict] = []
     notes: str = ""

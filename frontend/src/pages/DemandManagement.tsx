@@ -203,6 +203,11 @@ export default function DemandManagement({ onSelect, onCountChange }: Props) {
                                 ? d.experience_focus?.join(" / ") || "体验服内容"
                                 : d.tool_type}
                             </span>
+                            {(d.launched_tool_matches?.length || 0) > 0 && (
+                              <span className="chip" style={{ background: "#fff7ed", color: "#9a3412" }}>
+                                快爆已上线：{d.launched_tool_matches[0]}
+                              </span>
+                            )}
                             {d.demand_category === "experience_server" ? (
                               <div className="experience-branch-summary">
                                 {getCompactExperienceInsight(d).map((item) => (

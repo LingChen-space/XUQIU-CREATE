@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { BellRing, ExternalLink, Loader2, Clock, Gauge, Flag, Megaphone, X } from "lucide-react"
+import { BadgeCheck, BellRing, ExternalLink, Loader2, Clock, Gauge, Flag, Megaphone, X } from "lucide-react"
 import { api } from "../api/client"
 import type { DemandCard, DemandDetail } from "../types"
 import RadarChart from "./RadarChart"
@@ -168,6 +168,32 @@ export default function DemandDetailPanel({ demand, onClose }: { demand: DemandC
           ) : d ? (
             <>
               {d.demand_category === "experience_server" && <ExperienceInsightPanel demand={d} />}
+
+              {(d.launched_tool_matches?.length || 0) > 0 && (
+                <div className="slideover-section">
+                  <div style={{
+                    display: "flex",
+                    gap: 10,
+                    padding: 14,
+                    borderRadius: 10,
+                    background: "#fff7ed",
+                    color: "#9a3412",
+                    border: "1px solid #fed7aa",
+                  }}>
+                    <BadgeCheck size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <strong style={{ fontSize: 13 }}>快爆站内已上线，建议评估优化更新</strong>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {d.launched_tool_matches.map((name) => (
+                          <span key={name} className="chip" style={{ background: "#ffedd5", color: "#9a3412" }}>
+                            {name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Signal radar */}
               <div className="slideover-section">

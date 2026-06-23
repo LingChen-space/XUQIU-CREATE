@@ -1,4 +1,4 @@
-import { BellRing, Clock, Gauge, Megaphone } from "lucide-react"
+import { BadgeCheck, BellRing, Clock, Gauge, Megaphone } from "lucide-react"
 import type { DemandCard } from "../types"
 import { getDemandDisplayTitle } from "../utils/demandGrouping"
 import { getExperienceInsightRows } from "../utils/experienceInsight"
@@ -72,6 +72,7 @@ export default function DemandCardView({ demand, onClick, showFullSignals = true
   const category = CATEGORY_STYLE[demand.demand_category || "tool"] || CATEGORY_STYLE.tool
   const displayTitle = getDemandDisplayTitle(demand)
   const isExperienceServer = demand.demand_category === "experience_server"
+  const launchedTools = demand.launched_tool_matches || []
 
   const signalEntries = Object.entries(demand.signals).filter(
     ([k]) => k in SIGNAL_LABELS
@@ -119,6 +120,28 @@ export default function DemandCardView({ demand, onClick, showFullSignals = true
       )}
 
       {isExperienceServer && <ExperienceInsightList demand={demand} />}
+
+      {launchedTools.length > 0 && (
+        <div style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 8,
+          padding: "9px 11px",
+          borderRadius: 8,
+          background: "#fff7ed",
+          color: "#9a3412",
+          border: "1px solid #fed7aa",
+          fontSize: 12,
+          fontWeight: 600,
+          lineHeight: 1.45,
+        }}>
+          <BadgeCheck size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>
+            快爆站内已上线：{launchedTools.slice(0, 2).join("、")}
+            {launchedTools.length > 2 ? ` 等${launchedTools.length}个工具` : ""}，建议评估优化更新。
+          </span>
+        </div>
+      )}
 
       {/* Key info row: time + progress + feasibility */}
       <div style={{

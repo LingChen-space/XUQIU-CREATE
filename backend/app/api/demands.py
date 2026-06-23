@@ -19,6 +19,7 @@ from app.schemas.demand import (
     compute_demand_level,
     extract_experience_focus,
 )
+from app.services.launched_tool_matcher import find_launched_tool_matches
 
 router = APIRouter(prefix="/api/demands", tags=["demands"])
 
@@ -72,6 +73,13 @@ async def _build_demand_card(demand: Demand, db: AsyncSession) -> DemandCard:
         if category == "experience_server"
         else None
     )
+    launched_tool_matches = find_launched_tool_matches(
+        game_name=game.name if game else "",
+        tool_type=demand.tool_type.value,
+        title=demand.title,
+        description=demand.description,
+        reasoning=llm_reasoning,
+    )
 
     return DemandCard(
         id=demand.id,
@@ -97,6 +105,7 @@ async def _build_demand_card(demand: Demand, db: AsyncSession) -> DemandCard:
         demand_category=category,
         experience_focus=experience_focus,
         experience_insight=experience_insight,
+        launched_tool_matches=launched_tool_matches,
         demand_date=demand.demand_date,
         demand_level=compute_demand_level(demand.potential_score),
         created_at=demand.created_at,
@@ -134,6 +143,13 @@ async def _build_history_card(demand: Demand, db: AsyncSession) -> DemandHistory
         if category == "experience_server"
         else None
     )
+    launched_tool_matches = find_launched_tool_matches(
+        game_name=game.name if game else "",
+        tool_type=demand.tool_type.value,
+        title=demand.title,
+        description=demand.description,
+        reasoning=llm_reasoning,
+    )
 
     return DemandHistoryCard(
         id=demand.id,
@@ -150,6 +166,7 @@ async def _build_history_card(demand: Demand, db: AsyncSession) -> DemandHistory
         demand_category=category,
         experience_focus=experience_focus,
         experience_insight=experience_insight,
+        launched_tool_matches=launched_tool_matches,
         demand_date=demand.demand_date,
         created_at=demand.created_at,
         llm_reasoning=llm_reasoning,
@@ -313,6 +330,13 @@ async def get_demand_detail(demand_id: str, db: AsyncSession = Depends(get_db)):
         if category == "experience_server"
         else None
     )
+    launched_tool_matches = find_launched_tool_matches(
+        game_name=game.name if game else "",
+        tool_type=demand.tool_type.value,
+        title=demand.title,
+        description=demand.description,
+        reasoning=reasoning,
+    )
 
     # 相似历史需求
     sim_stmt = (
@@ -364,6 +388,7 @@ async def get_demand_detail(demand_id: str, db: AsyncSession = Depends(get_db)):
         demand_category=category,
         experience_focus=experience_focus,
         experience_insight=experience_insight,
+        launched_tool_matches=launched_tool_matches,
         evidence_posts=evidence_posts,
         similar_past_demands=similar_list,
         notes=demand.notes,

@@ -49,6 +49,7 @@ export interface DemandCard {
   demand_category: "tool" | "experience_server"
   experience_focus: string[]
   experience_insight: ExperienceServerInsight | null
+  launched_tool_matches: string[]
   demand_date: string
   demand_level: string
   created_at: string
