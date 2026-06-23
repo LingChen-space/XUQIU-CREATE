@@ -222,7 +222,9 @@ class TapKbApiClient(TapKbExportClient):
             if int(payload.get("code", 0) or 0) != 200:
                 raise RuntimeError(f"Tap+快爆接口 {feed_type} 请求失败: {payload.get('msg') or payload}")
 
-            next_last_ids[feed_type] = _first_int(payload.get("last_id"))
+            next_last_id = _first_int(payload.get("last_id"))
+            if next_last_id > 0:
+                next_last_ids[feed_type] = next_last_id
             for item in _extract_records(payload, "data", "items", "list", "rows"):
                 raw_id = _first_text(item.get("id"), item.get("external_id"))
                 if not raw_id:
@@ -289,9 +291,11 @@ class TapKbForumSyncService:
             records = _extract_records(content_result, "records", "contents", "items", "data", "list", "rows")
             raw_last_ids = content_result.get("last_ids") or {}
             last_ids = {
-                str(feed_type): _first_int(last_id)
+                str(feed_type): parsed_last_id
                 for feed_type, last_id in raw_last_ids.items()
                 if str(feed_type) in FEED_TYPES
+                for parsed_last_id in [_first_int(last_id)]
+                if parsed_last_id > 0
             } if isinstance(raw_last_ids, dict) else {}
             return records, last_ids
         return _extract_records(content_result, "records", "contents", "items", "data", "list", "rows"), {}
@@ -304,7 +308,7 @@ class TapKbForumSyncService:
 
     async def _save_last_ids(self, last_ids: dict[str, int]):
         for feed_type, last_id in last_ids.items():
-            if feed_type not in FEED_TYPES:
+            if feed_type not in FEED_TYPES or last_id <= 0:
                 continue
             result = await self.session.execute(
                 select(ExternalMonitorCursor).where(

@@ -67,6 +67,14 @@ class FakeIncrementalTapKbClient(TapKbExportClient):
         return []
 
 
+class FakeEmptyZeroLastIdTapKbClient(TapKbExportClient):
+    async def fetch_contents(self, days: int, last_ids: dict[str, int] | None = None):
+        return {"records": [], "last_ids": {"tap": 0, "hykb": 0}}
+
+    async def fetch_configs(self) -> list[dict]:
+        return []
+
+
 async def reset_tables():
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
@@ -282,6 +290,17 @@ class ExternalMonitorSyncTest(unittest.TestCase):
         asyncio.run(run_sync(client))
 
         self.assertEqual(client.requested_last_ids, {"tap": 100, "hykb": 120})
+
+    def test_sync_does_not_overwrite_saved_last_id_with_zero_response(self):
+        asyncio.run(seed_cursor("tap", 178394))
+        asyncio.run(seed_cursor("hykb", 150390))
+        client = FakeEmptyZeroLastIdTapKbClient()
+
+        result = asyncio.run(run_sync(client))
+
+        self.assertEqual(result["last_ids"], {})
+        cursors = asyncio.run(fetch_cursors())
+        self.assertEqual({c.feed_type: c.last_id for c in cursors}, {"tap": 178394, "hykb": 150390})
 
     def test_api_client_posts_signed_tap_and_hykb_requests(self):
         calls: list[dict] = []
