@@ -3,6 +3,7 @@
 import asyncio
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,7 +14,7 @@ from app.database import Base
 from app.models.external_monitor_cursor import ExternalMonitorCursor
 from app.models.external_monitor_record import ExternalMonitorRecord
 from app.models.game import Game, GameGenre, GameStatus
-from app.models.platform_content import ContentPlatform, PlatformContent
+from app.models.platform_content import ContentPlatform, ContentType, PlatformContent
 from app.models.platform_search_config import PlatformSearchConfig
 from app.services.external_monitor_sync import TapKbApiClient, TapKbExportClient, TapKbForumSyncService
 
@@ -238,6 +239,32 @@ class ExternalMonitorSyncTest(unittest.TestCase):
         games = asyncio.run(fetch_games())
         self.assertIn(game_name, {g.name for g in games})
 
+    def test_force_sync_updates_existing_external_content_fields(self):
+        asyncio.run(seed_platform_content("tap_kb_forum:tap-update"))
+        client = FakeTapKbClient(
+            contents=[
+                {
+                    "external_id": "tap-update",
+                    "platform": "TapTap",
+                    "game_name": GAME_NAME,
+                    "title": f"{GAME_NAME}\u65b0\u6807\u9898",
+                    "summary": "\u5e16\u5b50\u6458\u8981",
+                    "url": "https://www.taptap.cn/moment/tap-update",
+                    "published_at": "2026-06-23 10:00:00",
+                }
+            ],
+            configs=[],
+        )
+
+        result = asyncio.run(run_sync(client, force=True))
+
+        self.assertEqual(result["contents"]["inserted"], 0)
+        rows = asyncio.run(fetch_contents())
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].title, f"{GAME_NAME}\u65b0\u6807\u9898")
+        self.assertEqual(rows[0].body, "\u5e16\u5b50\u6458\u8981")
+        self.assertEqual(str(rows[0].published_at), "2026-06-23 10:00:00")
+
     def test_config_sync_does_not_overwrite_manual_keywords(self):
         async def seed_manual_config():
             async with TestSession() as session:
@@ -324,6 +351,38 @@ class ExternalMonitorSyncTest(unittest.TestCase):
         self.assertEqual(calls[0]["data"]["time"], 1700000000)
         self.assertEqual(calls[0]["data"]["sign"], "4639dc588670101013c09d854e44d8c6")
 
+    def test_api_client_preserves_enriched_export_fields(self):
+        async def post_form(url: str, data: dict):
+            return {
+                "code": 200,
+                "last_id": 100,
+                "data": [
+                    {
+                        "id": "123",
+                        "title": "\u6807\u9898\u5185\u5bb9",
+                        "url": "https://www.taptap.cn/moment/123",
+                        "published_at": "2026-06-23 10:00:00",
+                        "summary": "\u5e16\u5b50\u6458\u8981",
+                        "game_name": "\u6e38\u620f\u540d",
+                    }
+                ] if data["type"] == "tap" else [],
+            }
+
+        client = TapKbApiClient(
+            api_url="http://example.test/api.php",
+            secret="secret",
+            clock=lambda: 1700000000,
+            post_form=post_form,
+        )
+
+        result = asyncio.run(client.fetch_contents(days=30))
+
+        self.assertEqual(len(result["records"]), 1)
+        record = result["records"][0]
+        self.assertEqual(record["published_at"], "2026-06-23 10:00:00")
+        self.assertEqual(record["summary"], "\u5e16\u5b50\u6458\u8981")
+        self.assertEqual(record["game_name"], "\u6e38\u620f\u540d")
+
     def test_api_client_defaults_to_official_production_url(self):
         client = TapKbApiClient()
 
@@ -359,10 +418,10 @@ class ExternalMonitorSyncTest(unittest.TestCase):
         self.assertIs(captured_kwargs.get("follow_redirects"), True)
 
 
-async def run_sync(client: TapKbExportClient) -> dict:
+async def run_sync(client: TapKbExportClient, force: bool = False) -> dict:
     async with TestSession() as session:
         service = TapKbForumSyncService(session, client)
-        return await service.sync(days=30)
+        return await service.sync(days=30, force=force)
 
 
 async def fetch_contents() -> list[PlatformContent]:
@@ -398,6 +457,29 @@ async def fetch_games() -> list[Game]:
 async def seed_cursor(feed_type: str, last_id: int):
     async with TestSession() as session:
         session.add(ExternalMonitorCursor(source_key="tap_kb_forum", feed_type=feed_type, last_id=last_id))
+        await session.commit()
+
+
+async def seed_platform_content(source_id: str):
+    async with TestSession() as session:
+        game = (await session.execute(select(Game).where(Game.name == GAME_NAME))).scalar_one()
+        session.add(PlatformContent(
+            game_id=game.id,
+            platform=ContentPlatform.taptap,
+            content_type=ContentType.post,
+            source_id=source_id,
+            url="https://www.taptap.cn/moment/old",
+            title="\u65e7\u6807\u9898",
+            body="",
+            author="",
+            view_count=0,
+            like_count=0,
+            comment_count=0,
+            share_count=0,
+            hot_score=0,
+            published_at=datetime(2026, 6, 1, 10, 0, 0),
+            extra_data="{}",
+        ))
         await session.commit()
 
 

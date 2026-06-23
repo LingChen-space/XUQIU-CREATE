@@ -232,8 +232,11 @@ class TapKbApiClient(TapKbExportClient):
                 records.append({
                     "external_id": f"{feed_type}:{raw_id}",
                     "platform": platform_label,
+                    "game_name": _first_text(item.get("game_name"), item.get("game")),
                     "title": _first_text(item.get("title")),
+                    "summary": _first_text(item.get("summary"), item.get("body"), item.get("description")),
                     "url": _first_text(item.get("url")),
+                    "published_at": _first_text(item.get("published_at"), item.get("created_at")),
                     "raw_feed_type": feed_type,
                     "raw": item,
                 })
@@ -399,12 +402,12 @@ class TapKbForumSyncService:
             for item in records
             if _first_text(item.get("external_id"), item.get("id"))
         }
-        existing_source_ids: set[str] = set()
+        existing_by_source_id: dict[str, PlatformContent] = {}
         if source_ids:
             existing = await self.session.execute(
-                select(PlatformContent.source_id).where(PlatformContent.source_id.in_(source_ids))
+                select(PlatformContent).where(PlatformContent.source_id.in_(source_ids))
             )
-            existing_source_ids = set(existing.scalars().all())
+            existing_by_source_id = {content.source_id: content for content in existing.scalars().all()}
 
         seen: set[str] = set()
         for item in records:
@@ -413,7 +416,8 @@ class TapKbForumSyncService:
                 stats["invalid"] += 1
                 continue
             source_id = f"{SOURCE_KEY}:{external_id}"
-            if source_id in seen or source_id in existing_source_ids:
+            existing_content = existing_by_source_id.get(source_id)
+            if source_id in seen or (existing_content is not None and not force):
                 stats["duplicates"] += 1
                 continue
             seen.add(source_id)
@@ -440,23 +444,21 @@ class TapKbForumSyncService:
             comment_count = _first_int(item.get("comment_count"), item.get("comments"), item.get("reply_count"))
             share_count = _first_int(item.get("share_count"), item.get("shares"))
 
-            self.session.add(PlatformContent(
-                id=str(uuid.uuid4()),
-                game_id=game.id,
-                platform=platform,
-                content_type=ContentType.post,
-                source_id=source_id,
-                url=_first_text(item.get("url"), item.get("link")),
-                title=title,
-                body=body,
-                author=_first_text(item.get("author"), item.get("nickname"), item.get("user_name")),
-                view_count=view_count,
-                like_count=like_count,
-                comment_count=comment_count,
-                share_count=share_count,
-                hot_score=compute_content_hot_score(view_count, like_count, comment_count, share_count),
-                published_at=_parse_datetime(item.get("published_at") or item.get("created_at")),
-                extra_data=json.dumps({
+            content_values = {
+                "game_id": game.id,
+                "platform": platform,
+                "content_type": ContentType.post,
+                "url": _first_text(item.get("url"), item.get("link")),
+                "title": title,
+                "body": body,
+                "author": _first_text(item.get("author"), item.get("nickname"), item.get("user_name")),
+                "view_count": view_count,
+                "like_count": like_count,
+                "comment_count": comment_count,
+                "share_count": share_count,
+                "hot_score": compute_content_hot_score(view_count, like_count, comment_count, share_count),
+                "published_at": _parse_datetime(item.get("published_at") or item.get("created_at")),
+                "extra_data": json.dumps({
                     "source_key": SOURCE_KEY,
                     "source_label": SOURCE_LABEL,
                     "platform_key": platform_key,
@@ -465,6 +467,16 @@ class TapKbForumSyncService:
                     "raw_feed_type": _first_text(item.get("raw_feed_type")),
                     "raw": item.get("raw") if isinstance(item.get("raw"), dict) else item,
                 }, ensure_ascii=False),
+            }
+            if existing_content is not None:
+                for key, value in content_values.items():
+                    setattr(existing_content, key, value)
+                continue
+
+            self.session.add(PlatformContent(
+                id=str(uuid.uuid4()),
+                source_id=source_id,
+                **content_values,
             ))
             stats["inserted"] += 1
 
