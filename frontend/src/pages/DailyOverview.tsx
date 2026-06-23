@@ -165,15 +165,21 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
     }
   }
 
-  const startPolling = () => {
+  const startPolling = (minPolls = 1) => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
     setProgressLoading(true)
     setProgressExpanded(true)
+    let pollCount = 0
     const poll = async () => {
       try {
+        pollCount += 1
         const p = await api.getCrawlProgress()
         setProgress(p)
         const allDone = p.records.every(r => r.status === 'completed' || r.status === 'failed')
-        if (allDone && p.records.length > 0) {
+        if (allDone && p.records.length > 0 && pollCount >= minPolls) {
           if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
           setProgressLoading(false)
         }
@@ -188,7 +194,8 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
 
   const triggerPipeline = async (forceRecrawl = false) => {
     setPipelineLoading(true)
-    setCrawlNotice(null)
+    setCrawlNotice(forceRecrawl ? "正在强制重新采集并分析需求..." : "正在启动采集和需求分析...")
+    startPolling(3)
     try {
       const result = await api.triggerPipeline({ force_recrawl: forceRecrawl })
       if (result.external_sync) setExternalStatus(result.external_sync)
@@ -196,6 +203,8 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
         setCrawlNotice("已忽略今日完成状态并重新抓取，入库仍会自动去重。")
       } else if (result.ingest?.status === "skipped_completed") {
         setCrawlNotice(result.ingest.message || "今日所有平台关键词组合均已完成采集，本次无需重新抓取。")
+      } else if (result.ingest?.ingested_count === 0) {
+        setCrawlNotice("本次已执行采集和分析，但新入库为 0 条，请展开采集进度查看失败或去重原因。")
       }
       startPolling()
       await fetchData(false)
@@ -445,25 +454,6 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
               transition: "width 0.4s ease",
             }} />
           </div>
-
-          {crawlNotice && (
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "9px 12px",
-              marginBottom: 12,
-              borderRadius: 6,
-              background: "rgba(16,185,129,0.08)",
-              border: "1px solid rgba(16,185,129,0.18)",
-              color: "var(--green)",
-              fontSize: 12,
-              lineHeight: 1.5,
-            }}>
-              <CheckCircle size={14} style={{ flexShrink: 0 }} />
-              <span>{crawlNotice}</span>
-            </div>
-          )}
 
           {crawlNotice && (
             <div style={{
