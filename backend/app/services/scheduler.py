@@ -6,6 +6,7 @@ from datetime import date
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +24,20 @@ logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 
 
+async def run_tap_kb_realtime_sync():
+    """增量同步 Tap+快爆后台，不触发完整需求分析。"""
+    async with async_session() as session:
+        try:
+            result = await TapKbForumSyncService(session).sync(days=30, force=False, reason="auto")
+            inserted = result.get("contents", {}).get("inserted", 0)
+            if inserted:
+                logger.info(f"[TapKbRealtimeSync] 同步到 {inserted} 条新内容")
+            return result
+        except Exception as exc:
+            logger.exception(f"[TapKbRealtimeSync] 执行失败: {exc}")
+            return {"ok": False, "status": "failed", "message": str(exc)}
+
+
 async def run_daily_pipeline(force_recrawl: bool = False):
     """
     每日主管线：
@@ -38,7 +53,11 @@ async def run_daily_pipeline(force_recrawl: bool = False):
         try:
             # --- Step 0: 外部监控后台同步 ---
             # 外部后台内容不依赖本地搜索词配置，同步可能自动创建新游戏。
-            external_sync = await TapKbForumSyncService(session).sync(days=30, force=force_recrawl)
+            external_sync = await TapKbForumSyncService(session).sync(
+                days=30,
+                force=force_recrawl,
+                reason="pipeline",
+            )
             logger.info(f"[DailyPipeline] 外部同步完成 - {external_sync.get('message', '')}")
 
             # --- Step 1: 数据接入 ---
@@ -131,8 +150,17 @@ def start_scheduler():
         name="每日需求挖掘管线",
         replace_existing=True,
     )
+    scheduler.add_job(
+        run_tap_kb_realtime_sync,
+        trigger=IntervalTrigger(minutes=1),
+        id="tap_kb_realtime_sync",
+        name="Tap+快爆后台实时增量同步",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
     scheduler.start()
-    logger.info(f"调度器已启动 - 每日 {settings.schedule_hour:02d}:{settings.schedule_minute:02d} 执行")
+    logger.info(f"调度器已启动 - 每日 {settings.schedule_hour:02d}:{settings.schedule_minute:02d} 执行，Tap+快爆每 1 分钟增量同步")
 
 
 def stop_scheduler():

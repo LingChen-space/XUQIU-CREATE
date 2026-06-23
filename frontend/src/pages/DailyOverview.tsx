@@ -86,7 +86,14 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
   const [retryingRecordIds, setRetryingRecordIds] = useState<Set<string>>(() => new Set())
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const tapKbPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const refreshTapKbStatus = async () => {
+    const status = await api.getTapKbForumStatus()
+    setExternalStatus(status)
+    return status
+  }
 
   const fetchData = async (showLoader = true) => {
     if (showLoader) setLoading(true)
@@ -118,8 +125,24 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
   useEffect(() => { fetchData() }, [])
 
   useEffect(() => {
+    const pollTapKbStatus = async () => {
+      try {
+        await refreshTapKbStatus()
+      } catch {}
+    }
+    tapKbPollRef.current = setInterval(pollTapKbStatus, 30000)
+    return () => {
+      if (tapKbPollRef.current) {
+        clearInterval(tapKbPollRef.current)
+        tapKbPollRef.current = null
+      }
+    }
+  }, [])
+
+  useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current)
+      if (tapKbPollRef.current) clearInterval(tapKbPollRef.current)
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     }
   }, [])
@@ -131,6 +154,15 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
       setToast(null)
       toastTimerRef.current = null
     }, 5000)
+  }
+
+  const acknowledgeTapKbNotice = async () => {
+    try {
+      const status = await api.acknowledgeTapKbForum()
+      setExternalStatus(status)
+    } catch {
+      showToast({ type: "error", message: "Tap+快爆提示确认失败，请稍后重试" })
+    }
   }
 
   const startPolling = () => {
@@ -261,6 +293,49 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
           <span style={{ color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {toast.message}
           </span>
+        </div>
+      )}
+
+      {externalStatus?.has_unread_new_contents && externalStatus.last_new_contents > 0 && (
+        <div style={{
+          background: "rgba(37,99,235,0.08)",
+          border: "1px solid rgba(37,99,235,0.18)",
+          borderRadius: "var(--radius-lg)",
+          padding: "12px 16px",
+          marginBottom: 16,
+          boxShadow: "var(--shadow-sm)",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          flexWrap: "wrap",
+        }}>
+          <Database size={16} color="var(--primary)" />
+          <div style={{ minWidth: 220, flex: "1 1 420px" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>
+              Tap+快爆同步到 {externalStatus.last_new_contents} 条新内容
+            </div>
+            {externalStatus.last_new_records?.length > 0 && (
+              <div style={{
+                marginTop: 4,
+                fontSize: 12,
+                color: "var(--text-muted)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}>
+                {externalStatus.last_new_records.slice(0, 3).map((record) => `${record.platform} · ${record.game_name} · ${record.title}`).join(" / ")}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={acknowledgeTapKbNotice}
+            style={{ padding: "7px 12px", fontSize: 12, marginLeft: "auto" }}
+          >
+            <CheckCircle size={14} />
+            知道了
+          </button>
         </div>
       )}
 

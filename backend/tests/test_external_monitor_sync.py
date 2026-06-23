@@ -16,7 +16,13 @@ from app.models.external_monitor_record import ExternalMonitorRecord
 from app.models.game import Game, GameGenre, GameStatus
 from app.models.platform_content import ContentPlatform, ContentType, PlatformContent
 from app.models.platform_search_config import PlatformSearchConfig
-from app.services.external_monitor_sync import TapKbApiClient, TapKbExportClient, TapKbForumSyncService
+from app.services.external_monitor_sync import (
+    TapKbApiClient,
+    TapKbExportClient,
+    TapKbForumSyncService,
+    acknowledge_tap_kb_new_contents,
+    get_tap_kb_sync_status,
+)
 
 GAME_NAME = "\u4e09\u89d2\u6d32\u884c\u52a8"
 KB_FORUM = "\u5feb\u7206\u8bba\u575b"
@@ -359,6 +365,51 @@ class ExternalMonitorSyncTest(unittest.TestCase):
         self.assertEqual(result["last_ids"], {})
         cursors = asyncio.run(fetch_cursors())
         self.assertEqual({c.feed_type: c.last_id for c in cursors}, {"tap": 178394, "hykb": 150390})
+
+    def test_sync_marks_new_contents_unread_with_recent_titles(self):
+        client = FakeTapKbClient(
+            contents=[
+                {
+                    "external_id": "tap-notice",
+                    "platform": "TapTap",
+                    "game_name": GAME_NAME,
+                    "title": f"{GAME_NAME}\u5361\u6218\u5907\u70ed\u5ea6\u5f88\u9ad8",
+                    "summary": "\u65b0\u5185\u5bb9\u9700\u8981\u524d\u7aef\u63d0\u9192",
+                    "url": "https://www.taptap.cn/moment/tap-notice",
+                    "published_at": "2026-06-23 10:00:00",
+                }
+            ],
+            configs=[],
+        )
+
+        result = asyncio.run(run_sync(client))
+
+        self.assertTrue(result["has_unread_new_contents"])
+        self.assertEqual(result["last_new_contents"], 1)
+        self.assertEqual(result["last_sync_reason"], "manual")
+        self.assertEqual(result["last_new_records"][0]["title"], f"{GAME_NAME}\u5361\u6218\u5907\u70ed\u5ea6\u5f88\u9ad8")
+        self.assertEqual(result["last_new_records"][0]["platform"], "TapTap")
+
+    def test_acknowledge_new_contents_clears_unread_notice(self):
+        client = FakeTapKbClient(
+            contents=[
+                {
+                    "external_id": "tap-ack",
+                    "platform": "TapTap",
+                    "game_name": GAME_NAME,
+                    "title": f"{GAME_NAME}\u5730\u56fe\u70b9\u4f4d\u66f4\u65b0",
+                    "url": "https://www.taptap.cn/moment/tap-ack",
+                }
+            ],
+            configs=[],
+        )
+        asyncio.run(run_sync(client))
+
+        status = acknowledge_tap_kb_new_contents()
+
+        self.assertFalse(status["has_unread_new_contents"])
+        self.assertEqual(status["last_new_contents"], 1)
+        self.assertEqual(get_tap_kb_sync_status()["last_new_records"][0]["title"], f"{GAME_NAME}\u5730\u56fe\u70b9\u4f4d\u66f4\u65b0")
 
     def test_api_client_posts_signed_tap_and_hykb_requests(self):
         calls: list[dict] = []

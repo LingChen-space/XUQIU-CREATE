@@ -200,6 +200,14 @@ export interface ExternalSyncStats {
   skipped?: number
 }
 
+export interface TapKbNewRecord {
+  platform: string
+  game_name: string
+  title: string
+  url: string
+  published_at: string
+}
+
 export interface TapKbSyncStatus {
   source_key: "tap_kb_forum"
   status: "idle" | "not_configured" | "completed" | "failed"
@@ -207,6 +215,11 @@ export interface TapKbSyncStatus {
   contents: ExternalSyncStats
   configs: ExternalSyncStats
   last_ids: Record<string, number>
+  last_new_contents: number
+  last_new_records: TapKbNewRecord[]
+  has_unread_new_contents: boolean
+  last_sync_reason: "startup" | "manual" | "pipeline" | "auto" | string
+  acknowledged_at: string | null
   synced_at: string | null
 }
 

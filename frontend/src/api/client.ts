@@ -83,4 +83,6 @@ export const api = {
       body: JSON.stringify({ days: options.days ?? 30, force: options.force ?? false }),
     }),
   getTapKbForumStatus: () => request<TapKbSyncStatus>('/external-monitors/tap-kb/status'),
+  acknowledgeTapKbForum: () =>
+    request<TapKbSyncStatus>('/external-monitors/tap-kb/ack', { method: 'POST' }),
 }

@@ -46,6 +46,11 @@ LAST_SYNC_STATUS: dict[str, Any] = {
         "skipped": 0,
     },
     "last_ids": {},
+    "last_new_contents": 0,
+    "last_new_records": [],
+    "has_unread_new_contents": False,
+    "last_sync_reason": "startup",
+    "acknowledged_at": None,
     "synced_at": None,
 }
 
@@ -265,7 +270,7 @@ class TapKbForumSyncService:
         self.session = session
         self.client = client or TapKbApiClient()
 
-    async def sync(self, days: int = 30, force: bool = False) -> dict:
+    async def sync(self, days: int = 30, force: bool = False, reason: str = "manual") -> dict:
         if not self.client.configured:
             return self._set_status(
                 "not_configured",
@@ -273,6 +278,7 @@ class TapKbForumSyncService:
                 self._empty_content_stats(),
                 self._empty_config_stats(),
                 {},
+                reason,
             )
 
         try:
@@ -291,6 +297,7 @@ class TapKbForumSyncService:
                 content_stats,
                 config_stats,
                 returned_last_ids,
+                reason,
             )
         except Exception as exc:
             logger.exception("[TapKbSync] sync failed")
@@ -300,6 +307,7 @@ class TapKbForumSyncService:
                 self._empty_content_stats(),
                 self._empty_config_stats(),
                 {},
+                reason,
             )
 
     @staticmethod
@@ -406,6 +414,7 @@ class TapKbForumSyncService:
         stats["fetched"] = len(records)
         if not records:
             return stats
+        new_records: list[dict[str, Any]] = []
 
         result = await self.session.execute(select(Game))
         games = list(result.scalars().all())
@@ -493,8 +502,17 @@ class TapKbForumSyncService:
                 **content_values,
             ))
             stats["inserted"] += 1
+            if len(new_records) < 5:
+                new_records.append({
+                    "platform": _first_text(item.get("platform")),
+                    "game_name": game.name,
+                    "title": title,
+                    "url": content_values["url"],
+                    "published_at": content_values["published_at"].isoformat(),
+                })
 
         await self.session.commit()
+        stats["_new_records"] = new_records
         return stats
 
     async def _ensure_external_game(
@@ -601,15 +619,34 @@ class TapKbForumSyncService:
         content_stats: dict,
         config_stats: dict,
         last_ids: dict[str, int],
+        reason: str = "manual",
     ) -> dict:
         global LAST_SYNC_STATUS
+        public_content_stats = dict(content_stats)
+        new_records = public_content_stats.pop("_new_records", [])
+        inserted = int(public_content_stats.get("inserted") or 0)
+        if inserted > 0:
+            last_new_contents = inserted
+            last_new_records = new_records
+            has_unread_new_contents = True
+            acknowledged_at = None
+        else:
+            last_new_contents = LAST_SYNC_STATUS.get("last_new_contents", 0)
+            last_new_records = LAST_SYNC_STATUS.get("last_new_records", [])
+            has_unread_new_contents = bool(LAST_SYNC_STATUS.get("has_unread_new_contents", False))
+            acknowledged_at = LAST_SYNC_STATUS.get("acknowledged_at")
         LAST_SYNC_STATUS = {
             "source_key": SOURCE_KEY,
             "status": status,
             "message": message,
-            "contents": content_stats,
+            "contents": public_content_stats,
             "configs": config_stats,
             "last_ids": last_ids,
+            "last_new_contents": last_new_contents,
+            "last_new_records": last_new_records,
+            "has_unread_new_contents": has_unread_new_contents,
+            "last_sync_reason": reason,
+            "acknowledged_at": acknowledged_at,
             "synced_at": datetime.now().isoformat(),
         }
         return LAST_SYNC_STATUS
@@ -635,4 +672,14 @@ class TapKbForumSyncService:
 
 
 def get_tap_kb_sync_status() -> dict:
+    return LAST_SYNC_STATUS
+
+
+def acknowledge_tap_kb_new_contents() -> dict:
+    global LAST_SYNC_STATUS
+    LAST_SYNC_STATUS = {
+        **LAST_SYNC_STATUS,
+        "has_unread_new_contents": False,
+        "acknowledged_at": datetime.now().isoformat(),
+    }
     return LAST_SYNC_STATUS
