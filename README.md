@@ -74,7 +74,9 @@ venv\Scripts\activate        # Windows
 pip install -r requirements.txt
 
 # 配置环境变量（编辑 .env 文件）
-# LLM_API_KEY=your-key      # 填入 LLM API Key 启用 AI 分析
+# LLM_API_KEY=your-key      # 必填，缺失时后端启动失败
+# LLM_API_BASE=https://api.example.com/v1
+# LLM_MODEL=your-model-name
 # CRAWLER_API_KEY=your-key  # 填入爬虫 API Key 对接真实数据
 
 # 启动后端（开发模式，含 Mock 数据）
@@ -101,7 +103,7 @@ npm run dev
 
 1. 打开浏览器访问 `http://localhost:5173`
 2. 点击「立即分析」按钮，触发一次完整的分析管线
-3. 系统将：拉取 Mock 数据 → 计算六维信号 → 规则 Fallback 分析 → 生成需求卡片和日报
+3. 系统将：拉取数据 → 计算七维信号 → 大模型分析 → 生成需求卡片和日报
 4. 在需求管理页可以更改需求状态、添加备注
 
 ### 4. 配置真实 LLM
@@ -110,11 +112,11 @@ npm run dev
 
 ```env
 LLM_API_KEY=sk-your-key-here
-LLM_API_BASE=https://api.openai.com/v1
-LLM_MODEL=gpt-4o-mini
+LLM_API_BASE=https://api.example.com/v1
+LLM_MODEL=your-model-name
 ```
 
-配置后 LLM Pipeline 将自动启用，替代规则 Fallback，产出更精准的需求分析。
+以上三项均为必填配置。任一配置缺失时，后端会在启动阶段直接报错，不会使用默认模型或静默切换到本地规则分析。
 
 ## 核心 API
 

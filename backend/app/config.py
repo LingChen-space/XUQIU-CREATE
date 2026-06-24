@@ -1,5 +1,6 @@
 """应用配置，支持 .env 覆盖。"""
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 from pathlib import Path
 
@@ -28,9 +29,9 @@ class Settings(BaseSettings):
     tap_kb_api_key: str = ""
 
     # LLM API（用户提供）
-    llm_api_base: str = "https://api.openai.com/v1"
+    llm_api_base: str = ""
     llm_api_key: str = ""
-    llm_model: str = "gpt-4o-mini"
+    llm_model: str = ""
 
     # 每日调度时间（24小时制）
     schedule_hour: int = 6
@@ -40,6 +41,21 @@ class Settings(BaseSettings):
     signal_repeat_question_threshold: float = 0.75
     signal_info_scatter_threshold: int = 5
     signal_scarcity_keywords: list[str] = ["限量", "资格", "抢码", "体验服", "测试资格", "内测", "先到先得"]
+
+    @model_validator(mode="after")
+    def validate_llm_config(self):
+        missing = [
+            env_name
+            for env_name, value in (
+                ("LLM_API_KEY", self.llm_api_key),
+                ("LLM_API_BASE", self.llm_api_base),
+                ("LLM_MODEL", self.llm_model),
+            )
+            if not value.strip()
+        ]
+        if missing:
+            raise ValueError(f"缺少必需的 LLM 配置: {', '.join(missing)}")
+        return self
 
     class Config:
         env_file = ".env"
