@@ -23,33 +23,34 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 SIGNAL_LABELS = ["重复提问密度", "信息分散度", "民间工具萌芽", "资格稀缺信号", "机制复杂度", "内容热度", "外部平台工具上线"]
 SIGNAL_KEYS = ["repeat_question", "info_scatter", "grassroots_tool", "scarcity", "mechanism_complexity", "content_heat", "external_platform_tool"]
+HISTORY_SHOWCASE_DATE = date(2026, 6, 24)
 
 
 @router.get("/summary", response_model=DashboardSummary)
 async def get_dashboard_summary(db: AsyncSession = Depends(get_db)):
     """看板首页概览数据。"""
     today = date.today()
+    show_all_history = today == HISTORY_SHOWCASE_DATE
 
     # 获取活跃游戏ID（非已停运）
     active_stmt = select(Game.id).where(Game.status != GameStatus.inactive)
     active_result = await db.execute(active_stmt)
     active_game_ids = {row[0] for row in active_result.all()}
 
-    # 今日需求（仅活跃游戏）
-    stmt = (
-        select(Demand)
-        .where(
-            Demand.demand_date == today,
-            Demand.game_id.in_(active_game_ids) if active_game_ids else True,
-        )
-        .order_by(Demand.potential_score.desc())
+    # 2026-06-24 临时展示全部历史需求；其他日期保持仅展示今日需求。
+    stmt = select(Demand).where(
+        Demand.game_id.in_(active_game_ids) if active_game_ids else True,
     )
+    if not show_all_history:
+        stmt = stmt.where(Demand.demand_date == today)
+    stmt = stmt.order_by(Demand.potential_score.desc())
     result = await db.execute(stmt)
     today_demands = result.scalars().all()
 
     # 构建需求卡片列表
     top_cards = []
-    for d in today_demands[:10]:
+    displayed_demands = today_demands if show_all_history else today_demands[:10]
+    for d in displayed_demands:
         card = await _build_demand_card(d, db)
         top_cards.append(card)
 
