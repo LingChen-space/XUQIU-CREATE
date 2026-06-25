@@ -282,6 +282,68 @@ export interface PipelineRunResult {
   report_id: string | null
 }
 
+export type RadarClueLevel = "urgent" | "important" | "watch"
+export type RadarClueStatus = "pending" | "confirmed" | "dismissed" | "promoted"
+export type RadarClueType =
+  | "new_term"
+  | "new_demand"
+  | "experience_update"
+  | "experience_leak"
+  | "qualification_change"
+  | "engagement_surge"
+  | "external_solution"
+
+export interface RadarEvidence {
+  id: string
+  platform: string
+  title: string
+  url: string
+  published_at: string
+}
+
+export interface RadarCoverage {
+  total_contents: number
+  new_contents: number
+  rule_completed: number
+  model_completed: number
+  pending: number
+  failed: number
+  collection_success: number
+  collection_failed: number
+}
+
+export interface RadarClue {
+  id: string
+  game_id: string
+  game_name: string
+  type: RadarClueType
+  level: RadarClueLevel
+  status: RadarClueStatus
+  title: string
+  summary: string
+  term: string
+  trigger_reason: string
+  evidence: RadarEvidence[]
+  scores: Record<string, number>
+  engagement: Record<string, unknown>
+  suggested_tool_type: string
+  total_score: number
+  first_seen_at: string
+  last_seen_at: string
+  suppressed_until: string | null
+  demand_id: string | null
+}
+
+export interface RadarSummary {
+  urgent_count: number
+  important_count: number
+  watch_count: number
+  surge_count: number
+  confirmed_today: number
+  coverage: RadarCoverage
+  clues: RadarClue[]
+}
+
 export interface ChatMessage {
   id: string
   role: "user" | "assistant"

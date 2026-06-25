@@ -1662,3 +1662,247 @@
   color: var(--text-secondary);
   margin: 0 0 8px;
 }
+.radar-panel {
+  margin: 0 0 24px;
+  padding: 18px;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: var(--shadow-sm);
+}
+
+.radar-panel-loading,
+.radar-panel-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+
+.radar-panel-error {
+  border-color: #fecaca;
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.radar-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.radar-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 15px;
+  font-weight: 750;
+  color: #172554;
+}
+
+.radar-panel-header p {
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.radar-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12);
+}
+
+.radar-summary-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.radar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.radar-chip.urgent { color: #b91c1c; background: #fee2e2; }
+.radar-chip.important { color: #b45309; background: #fef3c7; }
+.radar-chip.watch { color: #1d4ed8; background: #dbeafe; }
+.radar-chip.surge { color: #c2410c; background: #ffedd5; }
+.radar-chip.confirmed { color: #047857; background: #d1fae5; }
+
+.radar-coverage {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-bottom: 14px;
+  padding: 8px 11px;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.radar-coverage.has-risk {
+  color: #9a3412;
+  background: #fff7ed;
+}
+
+.radar-levels,
+.radar-clue-list {
+  display: grid;
+  gap: 10px;
+}
+
+.radar-level {
+  display: grid;
+  gap: 8px;
+}
+
+.radar-level-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: default;
+}
+
+.radar-level-watch .radar-level-heading {
+  cursor: pointer;
+}
+
+.radar-clue-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.radar-clue-card.urgent { border-left-color: #ef4444; }
+.radar-clue-card.important { border-left-color: #f59e0b; }
+.radar-clue-card.watch { border-left-color: #3b82f6; }
+
+.radar-clue-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.radar-clue-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 7px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.radar-level-badge,
+.radar-game-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.radar-level-badge.urgent { color: #b91c1c; background: #fee2e2; }
+.radar-level-badge.important { color: #b45309; background: #fef3c7; }
+.radar-level-badge.watch { color: #1d4ed8; background: #dbeafe; }
+.radar-game-badge { color: #4338ca; background: #eef2ff; }
+
+.radar-clue-card h4 {
+  margin: 0 0 5px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.radar-clue-card p,
+.radar-reason {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.radar-reason {
+  margin-top: 5px;
+  color: #475569;
+}
+
+.radar-evidence-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.radar-evidence-list a,
+.radar-evidence-no-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 320px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: #f8fafc;
+  color: #2563eb;
+  font-size: 10px;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.radar-actions {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  width: 250px;
+}
+
+.radar-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 20px;
+  border: 1px dashed #bfdbfe;
+  border-radius: 9px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+@media (max-width: 980px) {
+  .radar-panel-header,
+  .radar-clue-card {
+    flex-direction: column;
+  }
+
+  .radar-summary-chips {
+    justify-content: flex-start;
+  }
+
+  .radar-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

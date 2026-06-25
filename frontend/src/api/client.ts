@@ -1,6 +1,6 @@
 import type { HistoryLeaderboardOut } from '../types'
 import type { MonitorContentList, ContentStats } from '../types'
-import type { CrawlProgress, PipelineRunResult, TapKbSyncStatus } from '../types'
+import type { CrawlProgress, PipelineRunResult, RadarClue, RadarSummary, TapKbSyncStatus } from '../types'
 
 const BASE = '/api'
 
@@ -85,4 +85,15 @@ export const api = {
   getTapKbForumStatus: () => request<TapKbSyncStatus>('/external-monitors/tap-kb/status'),
   acknowledgeTapKbForum: () =>
     request<TapKbSyncStatus>('/external-monitors/tap-kb/ack', { method: 'POST' }),
+  getRadarSummary: () => request<RadarSummary>('/radar/summary'),
+  getRadarClues: (params: Record<string, string> = {}) => {
+    const qs = new URLSearchParams(params).toString()
+    return request<RadarClue[]>(`/radar/clues${qs ? '?' + qs : ''}`)
+  },
+  confirmRadarClue: (id: string) =>
+    request<RadarClue>(`/radar/clues/${id}/confirm`, { method: 'POST' }),
+  dismissRadarClue: (id: string) =>
+    request<RadarClue>(`/radar/clues/${id}/dismiss`, { method: 'POST' }),
+  promoteRadarClue: (id: string) =>
+    request<RadarClue>(`/radar/clues/${id}/promote`, { method: 'POST' }),
 }
