@@ -19,10 +19,13 @@ from app.models.radar import (
     ContentScanState,
     RadarClue,
     RadarClueLevel,
+    RadarClueStatus,
+    RadarClueType,
 )
 from app.services.data_adapter import DataAdapter, exploration_keywords_for_game
 from app.services.radar_runner import (
     backfill_radar_history,
+    archive_nonstandard_radar_clues,
     compact_metric_snapshots,
     exploration_interval_minutes,
 )
@@ -246,6 +249,40 @@ class RadarIngestTest(unittest.TestCase):
                 return result, raw_count, hourly.view_count, hourly.like_count
 
         self.assertEqual(asyncio.run(scenario()), ((2, 1), 1, 180, 15))
+
+    def test_legacy_nonstandard_clues_are_archived(self):
+        async def scenario():
+            game_id = await seed_game()
+            async with Session() as session:
+                session.add_all([
+                    RadarClue(
+                        signature="legacy-free",
+                        game_id=game_id,
+                        clue_type=RadarClueType.new_term,
+                        level=RadarClueLevel.watch,
+                        status=RadarClueStatus.pending,
+                        title="旧自由词",
+                        term="模型发明词",
+                    ),
+                    RadarClue(
+                        signature="standard-generic",
+                        game_id=game_id,
+                        clue_type=RadarClueType.new_demand,
+                        level=RadarClueLevel.important,
+                        status=RadarClueStatus.pending,
+                        title="标准词",
+                        term="战绩查询",
+                    ),
+                ])
+                await session.commit()
+                count = await archive_nonstandard_radar_clues(session)
+                clues = (await session.execute(select(RadarClue))).scalars().all()
+                return count, {clue.term: clue.status for clue in clues}
+
+        count, statuses = asyncio.run(scenario())
+        self.assertEqual(count, 1)
+        self.assertEqual(statuses["模型发明词"], RadarClueStatus.archived)
+        self.assertEqual(statuses["战绩查询"], RadarClueStatus.pending)
 
 
 if __name__ == "__main__":

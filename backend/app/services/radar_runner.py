@@ -12,15 +12,53 @@ from app.models.radar import (
     ContentMetricHourly,
     ContentMetricSnapshot,
     ContentScanState,
+    RadarClue,
+    RadarClueStatus,
+    RadarClueType,
 )
 from app.services.engagement_surge import EngagementSurgeDetector
-from app.services.demand_keyword_rules import match_demand_keywords
+from app.services.demand_keyword_rules import match_demand_keywords, rules_for_game
 from app.services.radar import RadarService, normalize_concept
 from app.services.radar_model import RadarModelReviewer
 
 
 def exploration_interval_minutes(priority_weight: int) -> int:
     return 5 if int(priority_weight or 1) >= 3 else 30
+
+
+async def archive_nonstandard_radar_clues(session: AsyncSession) -> int:
+    """归档旧规则产生、无法映射到当前标准词库的待处理线索。"""
+    clues = (
+        await session.execute(
+            select(RadarClue).where(
+                RadarClue.status.in_([
+                    RadarClueStatus.pending,
+                    RadarClueStatus.confirmed,
+                ])
+            )
+        )
+    ).scalars().all()
+    games: dict[str, Game | None] = {}
+    archived = 0
+    for clue in clues:
+        if clue.game_id not in games:
+            games[clue.game_id] = await session.get(Game, clue.game_id)
+        game = games[clue.game_id]
+        standard_terms = (
+            {rule.canonical_term for rule in rules_for_game(game.name)}
+            if game is not None
+            else set()
+        )
+        if (
+            clue.clue_type != RadarClueType.new_demand
+            or clue.term not in standard_terms
+        ):
+            clue.status = RadarClueStatus.archived
+            clue.suppressed_until = None
+            archived += 1
+    if archived:
+        await session.commit()
+    return archived
 
 
 async def compact_metric_snapshots(
@@ -153,6 +191,7 @@ async def backfill_radar_history(session: AsyncSession) -> int:
                 existing.occurrence_count += 1
                 existing.last_seen_at = datetime.now()
     await session.commit()
+    await archive_nonstandard_radar_clues(session)
     return len(contents)
 
 

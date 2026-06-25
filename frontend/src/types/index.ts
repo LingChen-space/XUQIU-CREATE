@@ -282,7 +282,7 @@ export interface PipelineRunResult {
 }
 
 export type RadarClueLevel = "urgent" | "important" | "watch"
-export type RadarClueStatus = "pending" | "confirmed" | "dismissed" | "promoted"
+export type RadarClueStatus = "pending" | "confirmed" | "dismissed" | "promoted" | "archived"
 export type RadarClueType =
   | "new_term"
   | "new_demand"
