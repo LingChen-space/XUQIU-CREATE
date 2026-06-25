@@ -194,7 +194,7 @@ class ExternalMonitorSyncTest(unittest.TestCase):
         self.assertEqual(raw_rows[0].external_id, "tap-unmatched")
         self.assertEqual(raw_rows[0].title, "\u672a\u77e5\u6e38\u620f\u914d\u88c5\u5de5\u5177")
 
-    def test_sync_creates_external_game_for_unconfigured_monitor_content(self):
+    def test_sync_does_not_create_game_for_unconfigured_monitor_content(self):
         game_name = "\u65b0\u6e38\u620f"
         client = FakeTapKbClient(
             contents=[
@@ -212,18 +212,17 @@ class ExternalMonitorSyncTest(unittest.TestCase):
 
         result = asyncio.run(run_sync(client))
 
-        self.assertEqual(result["contents"]["inserted"], 1)
-        self.assertEqual(result["contents"]["unmatched_games"], 0)
-        self.assertEqual(result["contents"]["created_games"], 1)
+        self.assertEqual(result["contents"]["inserted"], 0)
+        self.assertEqual(result["contents"]["unmatched_games"], 1)
+        self.assertEqual(result["contents"]["created_games"], 0)
         games = asyncio.run(fetch_games())
-        created = next((g for g in games if g.name == game_name), None)
-        self.assertIsNotNone(created)
-        self.assertEqual(created.publisher, "\u5916\u90e8\u76d1\u63a7")
-        rows = asyncio.run(fetch_contents())
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0].game_id, created.id)
+        self.assertNotIn(game_name, {g.name for g in games})
+        self.assertEqual(len(asyncio.run(fetch_contents())), 0)
+        raw_rows = asyncio.run(fetch_raw_records())
+        self.assertEqual(len(raw_rows), 1)
+        self.assertEqual(raw_rows[0].external_id, "hykb-new-game")
 
-    def test_sync_infers_external_game_from_quoted_title(self):
+    def test_sync_does_not_create_game_from_quoted_title(self):
         game_name = "\u5f71\u4e4b\u5203"
         client = FakeTapKbClient(
             contents=[
@@ -240,10 +239,15 @@ class ExternalMonitorSyncTest(unittest.TestCase):
 
         result = asyncio.run(run_sync(client))
 
-        self.assertEqual(result["contents"]["inserted"], 1)
-        self.assertEqual(result["contents"]["created_games"], 1)
+        self.assertEqual(result["contents"]["inserted"], 0)
+        self.assertEqual(result["contents"]["unmatched_games"], 1)
+        self.assertEqual(result["contents"]["created_games"], 0)
         games = asyncio.run(fetch_games())
-        self.assertIn(game_name, {g.name for g in games})
+        self.assertNotIn(game_name, {g.name for g in games})
+        self.assertEqual(len(asyncio.run(fetch_contents())), 0)
+        raw_rows = asyncio.run(fetch_raw_records())
+        self.assertEqual(len(raw_rows), 1)
+        self.assertEqual(raw_rows[0].external_id, "tap-quoted-game")
 
     def test_sync_matches_existing_game_by_normalized_external_name(self):
         asyncio.run(create_game("\u6d1b\u514b\u738b\u56fd\u4e16\u754c"))

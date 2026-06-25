@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models.external_monitor_cursor import ExternalMonitorCursor
 from app.models.external_monitor_record import ExternalMonitorRecord
-from app.models.game import Game, GameGenre, GameStatus, default_priority_weight
+from app.models.game import Game
 from app.models.platform_content import ContentPlatform, ContentType, PlatformContent
 from app.models.platform_search_config import PlatformSearchConfig
 from app.models.radar import ContentMetricSnapshot, ContentScanState
@@ -157,23 +157,6 @@ def _clean_external_game_name(name: str) -> str:
 def _game_match_key(name: str) -> str:
     cleaned = _clean_external_game_name(name)
     return re.sub(r"[\s:：]+", "", cleaned).lower()
-
-
-def _infer_external_game_name(game_name: str, title: str, body: str) -> str:
-    explicit = _clean_external_game_name(_first_text(game_name))
-    if explicit:
-        return explicit
-
-    text = f"{title} {body}"
-    quoted = re.search(r"《([^》]{2,40})》", text)
-    if quoted:
-        return _clean_external_game_name(quoted.group(1))
-
-    experience = re.search(r"([\u4e00-\u9fffA-Za-z0-9：:·]{2,30}体验服)", text)
-    if experience:
-        return _clean_external_game_name(experience.group(1))
-
-    return ""
 
 
 class TapKbExportClient:
@@ -454,10 +437,6 @@ class TapKbForumSyncService:
             game_name = _first_text(item.get("game_name"), item.get("game"))
             game = self._match_game(game_name, title, body, games_by_name, games)
             if game is None:
-                game = await self._ensure_external_game(game_name, title, body, games_by_name, games)
-                if game is not None:
-                    stats["created_games"] += 1
-            if game is None:
                 stats["unmatched_games"] += 1
                 continue
 
@@ -534,36 +513,6 @@ class TapKbForumSyncService:
         await self.session.commit()
         stats["_new_records"] = new_records
         return stats
-
-    async def _ensure_external_game(
-        self,
-        game_name: str,
-        title: str,
-        body: str,
-        games_by_name: dict[str, Game],
-        games: list[Game],
-    ) -> Game | None:
-        inferred_name = _infer_external_game_name(game_name, title, body)
-        if not inferred_name:
-            return None
-        existing = games_by_name.get(inferred_name)
-        if existing is not None:
-            return existing
-
-        game = Game(
-            id=str(uuid.uuid4()),
-            name=inferred_name,
-            genre=GameGenre.other,
-            publisher="外部监控",
-            status=GameStatus.operating,
-            priority_weight=default_priority_weight(inferred_name),
-            notes="Tap+快爆后台同步自动创建",
-        )
-        self.session.add(game)
-        await self.session.flush()
-        games_by_name[inferred_name] = game
-        games.append(game)
-        return game
 
     @staticmethod
     def _match_game(game_name: str, title: str, body: str, games_by_name: dict[str, Game], games: list[Game]) -> Game | None:
