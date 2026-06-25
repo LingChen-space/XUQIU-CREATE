@@ -344,6 +344,25 @@ export interface RadarSummary {
   clues: RadarClue[]
 }
 
+export interface RadarGroupedTerm {
+  id: string
+  term: string
+  level: RadarClueLevel
+  total_score: number
+  clue_type: RadarClueType
+  demand_id: string | null
+  status: RadarClueStatus
+  merged_count: number
+}
+
+export interface RadarGameGroup {
+  game_id: string
+  game_name: string
+  priority_weight: number
+  count: number
+  clues: RadarGroupedTerm[]
+}
+
 export interface ChatMessage {
   id: string
   role: "user" | "assistant"

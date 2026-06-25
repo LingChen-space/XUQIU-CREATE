@@ -1906,3 +1906,151 @@
     justify-content: flex-start;
   }
 }
+
+/* 需求雷达 tab 页 —— 按游戏分组的需求词简洁视图 */
+.radar-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.radar-page-loading,
+.radar-page-error,
+.radar-page-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--text-secondary);
+}
+
+.radar-page-error {
+  color: #b91c1c;
+}
+
+.radar-page-toast {
+  position: fixed;
+  top: 18px;
+  right: 24px;
+  z-index: 50;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: #172554;
+  color: #fff;
+  font-size: 13px;
+  box-shadow: var(--shadow-md);
+}
+
+.radar-page-overview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.radar-page-overview > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 650;
+  color: #172554;
+}
+
+.radar-page-hint {
+  color: var(--text-muted);
+}
+
+.radar-page-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.radar-game-group {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 14px 16px;
+}
+
+.radar-game-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.radar-game-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.radar-game-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: #f1f5f9;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.radar-game-priority {
+  font-size: 11px;
+  color: #b91c1c;
+  background: #fef2f2;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.radar-term-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.radar-term-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px 5px 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  font-size: 13px;
+}
+
+.radar-term-chip.urgent { border-color: #fecaca; background: #fff5f5; }
+.radar-term-chip.important { border-color: #fde68a; background: #fffbeb; }
+.radar-term-chip.watch { border-color: #dbeafe; background: #f8fbff; }
+
+.radar-term-text {
+  font-weight: 600;
+  color: #1e293b;
+  max-width: 16em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.radar-term-score {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.radar-term-merged {
+  font-size: 10px;
+  color: #64748b;
+  background: #e2e8f0;
+  padding: 1px 5px;
+  border-radius: 999px;
+}
+
+.radar-term-promote {
+  padding: 2px 8px;
+  font-size: 11px;
+}

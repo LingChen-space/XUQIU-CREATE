@@ -1,11 +1,12 @@
 import { useState } from "react"
-import { LayoutDashboard, ClipboardList, Gamepad2, Trophy, Search, MessageSquareWarning, Radio, Bot } from "lucide-react"
+import { LayoutDashboard, ClipboardList, Gamepad2, Trophy, Search, MessageSquareWarning, Radio, Bot, Radar } from "lucide-react"
 import DailyOverview from "./pages/DailyOverview"
 import HistoryLeaderboard from "./pages/HistoryLeaderboard"
 import DemandManagement from "./pages/DemandManagement"
 import GameManagement from "./pages/GameManagement"
 import SearchConfigPage from "./pages/SearchConfigPage"
 import MonitoringData from "./pages/MonitoringData"
+import RadarPage from "./pages/RadarPage"
 import DemandDetailPanel from "./components/DemandDetailPanel"
 import AssistantPanel from "./components/AssistantPanel"
 import { useAssistantChat } from "./hooks/useAssistantChat"
@@ -15,13 +16,14 @@ const NAV_ITEMS = [
   { key: "overview", label: "今日需求", Icon: LayoutDashboard },
   { key: "history", label: "历史排行榜", Icon: Trophy },
   { key: "manage", label: "需求管理", Icon: ClipboardList },
+  { key: "radar", label: "需求雷达", Icon: Radar },
   { key: "monitor", label: "监控数据", Icon: Radio },
   { key: "search", label: "搜索词配置", Icon: Search },
   { key: "games", label: "游戏管理", Icon: Gamepad2 },
 ] as const
 
 function App() {
-  const [view, setView] = useState<"overview" | "history" | "manage" | "monitor" | "search" | "games">("overview")
+  const [view, setView] = useState<"overview" | "history" | "manage" | "radar" | "monitor" | "search" | "games">("overview")
   const [selectedDemand, setSelectedDemand] = useState<DemandCard | null>(null)
   const [activeGameCount, setActiveGameCount] = useState(0)
   const [managedDemandCount, setManagedDemandCount] = useState(0)
@@ -33,6 +35,7 @@ function App() {
     view === "overview" ? "今日需求总览"
       : view === "history" ? "历史需求排行榜"
       : view === "manage" ? "需求管理"
+      : view === "radar" ? "需求雷达"
       : view === "monitor" ? "监控数据"
       : view === "search" ? "搜索词配置"
       : "游戏管理"
@@ -105,6 +108,7 @@ function App() {
               onCountChange={setManagedDemandCount}
             />
           )}
+          {view === "radar" && <RadarPage />}
           {view === "monitor" && <MonitoringData />}
           {view === "search" && <SearchConfigPage />}
           {view === "games" && (

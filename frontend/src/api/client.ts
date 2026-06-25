@@ -1,6 +1,6 @@
 import type { HistoryLeaderboardOut } from '../types'
 import type { MonitorContentList, ContentStats } from '../types'
-import type { CrawlProgress, PipelineRunResult, RadarClue, RadarSummary, TapKbSyncStatus } from '../types'
+import type { CrawlProgress, PipelineRunResult, RadarClue, RadarGameGroup, RadarSummary, TapKbSyncStatus } from '../types'
 
 const BASE = '/api'
 
@@ -90,6 +90,7 @@ export const api = {
     const qs = new URLSearchParams(params).toString()
     return request<RadarClue[]>(`/radar/clues${qs ? '?' + qs : ''}`)
   },
+  getRadarCluesGrouped: () => request<RadarGameGroup[]>('/radar/clues/grouped'),
   confirmRadarClue: (id: string) =>
     request<RadarClue>(`/radar/clues/${id}/confirm`, { method: 'POST' }),
   dismissRadarClue: (id: string) =>

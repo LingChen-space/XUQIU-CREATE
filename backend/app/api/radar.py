@@ -27,6 +27,7 @@ from app.schemas.radar import (
     RadarEvidenceOut,
     RadarSummaryOut,
 )
+from app.services.radar import normalize_concept
 
 
 router = APIRouter(prefix="/api/radar", tags=["radar"])
@@ -119,6 +120,97 @@ async def list_radar_clues(
     ).limit(min(max(limit, 1), 500))
     clues = (await db.execute(stmt)).scalars().all()
     return [await _clue_out(clue, db) for clue in clues]
+
+
+_LEVEL_RANK = {
+    RadarClueLevel.urgent: 0,
+    RadarClueLevel.important: 1,
+    RadarClueLevel.watch: 2,
+}
+
+
+@router.get("/clues/grouped")
+async def list_radar_clues_grouped(db: AsyncSession = Depends(get_db)):
+    """按游戏聚合的需求词视图：跨 clue_type、按 normalize(term) 去重合并。
+
+    范围 status in (pending, confirmed)。每个游戏返回去重后的需求词列表，
+    每词带等级/分数/合并条数，供"需求雷达"tab 页简洁展示与升级操作。
+    """
+    clues = (
+        await db.execute(
+            select(RadarClue).where(
+                RadarClue.status.in_(
+                    [RadarClueStatus.pending, RadarClueStatus.confirmed]
+                )
+            )
+        )
+    ).scalars().all()
+    if not clues:
+        return []
+
+    games = (
+        await db.execute(
+            select(Game).where(Game.id.in_({c.game_id for c in clues}))
+        )
+    ).scalars().all()
+    game_map = {g.id: g for g in games}
+
+    # game_id -> {"game": Game, "terms": {normalized_term: 代表词}}
+    groups: dict[str, dict] = {}
+    for clue in clues:
+        norm = normalize_concept(clue.term)
+        if not norm:
+            continue
+        group = groups.setdefault(
+            clue.game_id, {"game": game_map.get(clue.game_id), "terms": {}}
+        )
+        cur = group["terms"].get(norm)
+        if cur is None:
+            group["terms"][norm] = {
+                "id": clue.id,
+                "term": clue.term,
+                "level": clue.level.value,
+                "total_score": clue.total_score or 0,
+                "clue_type": clue.clue_type.value,
+                "demand_id": clue.demand_id,
+                "status": clue.status.value,
+                "merged_count": 1,
+            }
+        else:
+            cur["merged_count"] += 1
+            # 代表词取 total_score 最高者
+            if (clue.total_score or 0) > cur["total_score"]:
+                cur["total_score"] = clue.total_score or 0
+                cur["id"] = clue.id
+                cur["term"] = clue.term
+                cur["clue_type"] = clue.clue_type.value
+                cur["demand_id"] = clue.demand_id
+                cur["status"] = clue.status.value
+            # 等级取组内最高（urgent > important > watch）
+            if _LEVEL_RANK.get(clue.level, 9) < _LEVEL_RANK.get(
+                RadarClueLevel(cur["level"]), 9
+            ):
+                cur["level"] = clue.level.value
+
+    result = []
+    for game_id, group in groups.items():
+        game = group["game"]
+        terms = list(group["terms"].values())
+        terms.sort(
+            key=lambda t: (
+                -t["total_score"],
+                _LEVEL_RANK.get(RadarClueLevel(t["level"]), 9),
+            )
+        )
+        result.append({
+            "game_id": game_id,
+            "game_name": game.name if game else "未知游戏",
+            "priority_weight": game.priority_weight if game else 0,
+            "count": len(terms),
+            "clues": terms,
+        })
+    result.sort(key=lambda x: (-(x["priority_weight"] or 0), -x["count"]))
+    return result
 
 
 @router.get("/summary", response_model=RadarSummaryOut)

@@ -6,7 +6,6 @@ import remarkGfm from "remark-gfm"
 import type { DashboardSummary, DemandCard, Game, CrawlProgress, CrawlProgressRecord, TapKbSyncStatus } from "../types"
 import DemandCardView from "../components/DemandCard"
 import { DEMAND_CATEGORY_LABELS, groupDemandsByGame } from "../utils/demandGrouping"
-import RadarPanel from "../components/RadarPanel"
 
 const LEVEL_STYLE: Record<string, { bg: string; color: string }> = {
   "S级": { bg: "var(--red-light)", color: "#b91c1c" },
@@ -930,8 +929,6 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
           )}
         </div>
       )}
-
-      <RadarPanel onDemandPromoted={() => fetchData(false)} />
 
       {/* 每日需求洞察总结已上移至指标卡下方 */}
 
