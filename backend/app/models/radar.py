@@ -114,6 +114,34 @@ class ContentMetricSnapshot(Base):
     captured_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
 
 
+class ContentMetricHourly(Base):
+    __tablename__ = "content_metric_hourly"
+    __table_args__ = (
+        UniqueConstraint(
+            "content_id",
+            "hour_start",
+            name="uq_content_metric_hourly_content_hour",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    content_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("platform_contents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    platform: Mapped[ContentPlatform] = mapped_column(SAEnum(ContentPlatform), nullable=False)
+    hour_start: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    view_count: Mapped[int] = mapped_column(Integer, default=0)
+    like_count: Mapped[int] = mapped_column(Integer, default=0)
+    comment_count: Mapped[int] = mapped_column(Integer, default=0)
+    share_count: Mapped[int] = mapped_column(Integer, default=0)
+    sample_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class RadarClue(Base):
     __tablename__ = "radar_clues"
 

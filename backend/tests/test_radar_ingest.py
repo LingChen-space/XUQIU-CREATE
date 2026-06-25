@@ -3,7 +3,7 @@
 import asyncio
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -12,9 +12,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.database import Base
 from app.models.game import Game, GameGenre, GameStatus
 from app.models.platform_content import ContentPlatform, ContentType, PlatformContent
-from app.models.radar import ContentMetricSnapshot, ContentScanState
-from app.services.data_adapter import DataAdapter
-from app.services.radar_runner import backfill_radar_history, exploration_interval_minutes
+from app.models.radar import ContentMetricHourly, ContentMetricSnapshot, ContentScanState
+from app.services.data_adapter import DataAdapter, exploration_keywords_for_game
+from app.services.radar_runner import (
+    backfill_radar_history,
+    compact_metric_snapshots,
+    exploration_interval_minutes,
+)
 
 
 db_path = Path(tempfile.gettempdir()) / "req_gen_radar_ingest_test.db"
@@ -108,6 +112,13 @@ class RadarIngestTest(unittest.TestCase):
         self.assertEqual(exploration_interval_minutes(1), 30)
         self.assertEqual(exploration_interval_minutes(2), 30)
 
+    def test_exploration_uses_game_name_aliases_and_experience_names(self):
+        keywords = exploration_keywords_for_game("和平精英")
+        self.assertIn("和平精英", keywords)
+        self.assertIn("和平精英体验服", keywords)
+        self.assertIn("地铁逃生", keywords)
+        self.assertEqual(len(keywords), len(set(keywords)))
+
     def test_history_backfill_creates_completed_scan_and_initial_snapshot_without_clue(self):
         async def scenario():
             game_id = await seed_game()
@@ -134,6 +145,63 @@ class RadarIngestTest(unittest.TestCase):
                 return result, state.rule_status, state.model_status, snapshots
 
         self.assertEqual(asyncio.run(scenario()), (1, "completed", "completed", 1))
+
+    def test_metric_snapshots_older_than_thirty_days_are_compacted_hourly(self):
+        async def scenario():
+            game_id = await seed_game()
+            now = datetime.now()
+            archive_hour = (now - timedelta(days=31)).replace(
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+            async with Session() as session:
+                content = PlatformContent(
+                    game_id=game_id,
+                    platform=ContentPlatform.taptap,
+                    content_type=ContentType.post,
+                    source_id="archive-source",
+                    title="归档内容",
+                    published_at=now - timedelta(days=40),
+                )
+                session.add(content)
+                await session.flush()
+                session.add_all([
+                    ContentMetricSnapshot(
+                        content_id=content.id,
+                        platform=ContentPlatform.taptap,
+                        view_count=100,
+                        like_count=10,
+                        comment_count=2,
+                        share_count=1,
+                        captured_at=archive_hour + timedelta(minutes=5),
+                    ),
+                    ContentMetricSnapshot(
+                        content_id=content.id,
+                        platform=ContentPlatform.taptap,
+                        view_count=180,
+                        like_count=15,
+                        comment_count=4,
+                        share_count=2,
+                        captured_at=archive_hour + timedelta(minutes=20),
+                    ),
+                    ContentMetricSnapshot(
+                        content_id=content.id,
+                        platform=ContentPlatform.taptap,
+                        view_count=220,
+                        captured_at=now - timedelta(days=29),
+                    ),
+                ])
+                await session.commit()
+
+                result = await compact_metric_snapshots(session, now=now)
+                raw_count = (
+                    await session.execute(select(func.count()).select_from(ContentMetricSnapshot))
+                ).scalar_one()
+                hourly = (await session.execute(select(ContentMetricHourly))).scalar_one()
+                return result, raw_count, hourly.view_count, hourly.like_count
+
+        self.assertEqual(asyncio.run(scenario()), ((2, 1), 1, 180, 15))
 
 
 if __name__ == "__main__":

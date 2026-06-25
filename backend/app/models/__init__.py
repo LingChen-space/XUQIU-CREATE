@@ -7,6 +7,7 @@ from app.models.platform_search_config import PlatformSearchConfig
 from app.models.crawl_progress import CrawlProgress
 from app.models.radar import (
     ContentConcept,
+    ContentMetricHourly,
     ContentMetricSnapshot,
     ContentScanState,
     RadarClue,
@@ -23,6 +24,7 @@ __all__ = [
     "CrawlProgress",
     "ContentScanState",
     "ContentConcept",
+    "ContentMetricHourly",
     "ContentMetricSnapshot",
     "RadarClue",
     "RadarCollectionState",

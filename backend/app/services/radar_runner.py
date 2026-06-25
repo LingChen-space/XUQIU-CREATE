@@ -2,12 +2,13 @@
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.platform_content import PlatformContent
 from app.models.radar import (
     ContentConcept,
+    ContentMetricHourly,
     ContentMetricSnapshot,
     ContentScanState,
 )
@@ -18,6 +19,64 @@ from app.services.radar_model import RadarModelReviewer
 
 def exploration_interval_minutes(priority_weight: int) -> int:
     return 5 if int(priority_weight or 1) >= 3 else 30
+
+
+async def compact_metric_snapshots(
+    session: AsyncSession,
+    *,
+    now: datetime | None = None,
+) -> tuple[int, int]:
+    """将30天前的明细快照按内容和小时聚合，然后删除已归档明细。"""
+    cutoff = (now or datetime.now()) - timedelta(days=30)
+    snapshots = (
+        await session.execute(
+            select(ContentMetricSnapshot)
+            .where(ContentMetricSnapshot.captured_at < cutoff)
+            .order_by(ContentMetricSnapshot.captured_at)
+        )
+    ).scalars().all()
+    if not snapshots:
+        return 0, 0
+
+    grouped: dict[tuple[str, datetime], list[ContentMetricSnapshot]] = {}
+    for snapshot in snapshots:
+        hour_start = snapshot.captured_at.replace(minute=0, second=0, microsecond=0)
+        grouped.setdefault((snapshot.content_id, hour_start), []).append(snapshot)
+
+    for (content_id, hour_start), samples in grouped.items():
+        hourly = (
+            await session.execute(
+                select(ContentMetricHourly).where(
+                    ContentMetricHourly.content_id == content_id,
+                    ContentMetricHourly.hour_start == hour_start,
+                )
+            )
+        ).scalar()
+        latest = samples[-1]
+        if hourly is None:
+            hourly = ContentMetricHourly(
+                content_id=content_id,
+                platform=latest.platform,
+                hour_start=hour_start,
+            )
+            session.add(hourly)
+        hourly.view_count = max(hourly.view_count or 0, *(sample.view_count for sample in samples))
+        hourly.like_count = max(hourly.like_count or 0, *(sample.like_count for sample in samples))
+        hourly.comment_count = max(
+            hourly.comment_count or 0,
+            *(sample.comment_count for sample in samples),
+        )
+        hourly.share_count = max(hourly.share_count or 0, *(sample.share_count for sample in samples))
+        hourly.sample_count = (hourly.sample_count or 0) + len(samples)
+
+    await session.flush()
+    await session.execute(
+        delete(ContentMetricSnapshot).where(
+            ContentMetricSnapshot.id.in_([snapshot.id for snapshot in snapshots])
+        )
+    )
+    await session.commit()
+    return len(snapshots), len(grouped)
 
 
 async def backfill_radar_history(session: AsyncSession) -> int:
@@ -138,10 +197,13 @@ async def run_radar_scan_cycle(session: AsyncSession) -> dict:
     for content_id in recent_snapshot_ids:
         if await detector.evaluate_content(content_id):
             surge_count += 1
+    compacted_snapshots, hourly_rows = await compact_metric_snapshots(session)
 
     return {
         "states_created": len(missing_contents),
         "rule_scanned": len(rule_content_ids),
         "model_reviewed": reviewed,
         "surges": surge_count,
+        "compacted_snapshots": compacted_snapshots,
+        "hourly_rows": hourly_rows,
     }

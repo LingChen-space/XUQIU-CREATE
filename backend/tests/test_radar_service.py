@@ -13,7 +13,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.database import Base
 from app.models.game import Game, GameGenre, GameStatus
 from app.models.platform_content import ContentPlatform, ContentType, PlatformContent
-from app.models.radar import ContentScanState, RadarClue, RadarClueLevel, RadarClueType
+from app.models.radar import (
+    ContentScanState,
+    RadarClue,
+    RadarClueLevel,
+    RadarClueStatus,
+    RadarClueType,
+)
 from app.services.radar import RadarService
 from app.services.radar_model import RadarModelReviewer
 
@@ -231,6 +237,63 @@ class RadarServiceTest(unittest.TestCase):
             (2, 5, "retry_wait"),
             (3, None, "failed"),
         ])
+
+    def test_dismissed_clue_reopens_when_level_rises(self):
+        async def scenario():
+            content_id = await seed_content("装备搭配太复杂")
+            async with Session() as session:
+                service = RadarService(session)
+                finding = {
+                    "type": "new_demand",
+                    "concept": "装备自动搭配",
+                    "summary": "希望自动给出搭配方案",
+                    "demand_intent": 70,
+                }
+                await service.apply_model_findings(content_id, [finding])
+                clue = (await session.execute(select(RadarClue))).scalar_one()
+                clue.status = RadarClueStatus.dismissed
+                clue.suppressed_until = datetime.now() + timedelta(days=30)
+                await session.commit()
+
+                await service.apply_model_findings(content_id, [{
+                    **finding,
+                    "force_level": "urgent",
+                    "timeliness": 100,
+                }])
+                await session.refresh(clue)
+                return clue.status, clue.suppressed_until, clue.level
+
+        self.assertEqual(
+            asyncio.run(scenario()),
+            (RadarClueStatus.pending, None, RadarClueLevel.urgent),
+        )
+
+    def test_dismissed_surge_reopens_when_velocity_rises_fifty_percent(self):
+        async def scenario():
+            content_id = await seed_content("热度快速增长")
+            async with Session() as session:
+                service = RadarService(session)
+                base = {
+                    "type": "engagement_surge",
+                    "concept": "热度快速增长",
+                    "summary": "互动正在增长",
+                    "engagement_velocity": 60,
+                    "engagement_detail": {"velocity": 100},
+                }
+                await service.apply_system_findings(content_id, [base])
+                clue = (await session.execute(select(RadarClue))).scalar_one()
+                clue.status = RadarClueStatus.dismissed
+                clue.suppressed_until = datetime.now() + timedelta(days=30)
+                await session.commit()
+
+                await service.apply_system_findings(content_id, [{
+                    **base,
+                    "engagement_detail": {"velocity": 150},
+                }])
+                await session.refresh(clue)
+                return clue.status, clue.suppressed_until
+
+        self.assertEqual(asyncio.run(scenario()), (RadarClueStatus.pending, None))
 
 
 if __name__ == "__main__":

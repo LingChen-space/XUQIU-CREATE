@@ -20,6 +20,7 @@ from app.models.platform_content import PlatformContent, ContentPlatform, Conten
 from app.models.platform_search_config import PlatformSearchConfig
 from app.models.crawl_progress import CrawlProgress
 from app.models.radar import ContentMetricSnapshot, ContentScanState, RadarCollectionState
+from app.services.llm_pipeline import _alias_group_for_game
 from app.utils.engagement import compute_content_hot_score
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,19 @@ MONITOR_PLATFORM_ENDPOINTS: dict[str, str] = {
     "taptap": "/taptap",
     "douyin": "/douyin",
 }
+
+
+def exploration_keywords_for_game(game_name: str) -> list[str]:
+    """返回游戏主名称、已知别名和体验服名称，保持原顺序去重。"""
+    keywords: list[str] = []
+    seen: set[str] = set()
+    for keyword in (game_name, *_alias_group_for_game(game_name)):
+        normalized = (keyword or "").strip()
+        if len(normalized) < 2 or normalized in seen:
+            continue
+        seen.add(normalized)
+        keywords.append(normalized)
+    return keywords
 
 
 # --- Mock 数据（开发阶段无监控服务时的回退） ---
@@ -991,19 +1005,32 @@ class DataAdapter:
                 state.last_error = ""
                 await self.session.commit()
                 try:
-                    items = await self._call_monitor(
-                        platform,
-                        game.name,
-                        min(config.crawl_count or 50, 100),
-                        getattr(config, "proxy_url", None),
-                    )
-                    mapped = [
-                        {
-                            **self._map_monitor_item(game.id, game.name, platform, item, game.name),
-                            "game_id": game.id,
-                        }
-                        for item in items
-                    ]
+                    mapped: list[dict] = []
+                    keyword_errors: list[str] = []
+                    successful_calls = 0
+                    for keyword in exploration_keywords_for_game(game.name):
+                        try:
+                            items = await self._call_monitor(
+                                platform,
+                                keyword,
+                                min(config.crawl_count or 50, 100),
+                                getattr(config, "proxy_url", None),
+                            )
+                            successful_calls += 1
+                            mapped.extend({
+                                **self._map_monitor_item(
+                                    game.id,
+                                    game.name,
+                                    platform,
+                                    item,
+                                    keyword,
+                                ),
+                                "game_id": game.id,
+                            } for item in items)
+                        except Exception as exc:
+                            keyword_errors.append(f"{keyword}: {exc}")
+                    if successful_calls == 0 and keyword_errors:
+                        raise MonitorCrawlError("；".join(keyword_errors))
                     inserted, stats = await self._dedup_and_insert(mapped, allow_unrelated=True)
                     inserted_total += inserted
                     updated_total += int(stats.get("updated_existing", 0))

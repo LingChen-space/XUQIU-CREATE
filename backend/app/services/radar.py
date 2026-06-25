@@ -240,6 +240,10 @@ class RadarService:
                 )
                 self.session.add(clue)
             else:
+                previous_level = clue.level
+                previous_summary = clue.summary
+                previous_engagement = self._json_dict(clue.engagement_detail)
+                candidate_engagement = finding.get("engagement_detail") or {}
                 existing_evidence = self._json_list(clue.evidence_content_ids)
                 if content.id not in existing_evidence:
                     existing_evidence.append(content.id)
@@ -247,12 +251,27 @@ class RadarService:
                 clue.last_seen_at = datetime.now()
                 clue.level = self._max_level(clue.level, level)
                 clue.total_score = max(clue.total_score, total_score)
+                clue.score_detail = json.dumps(scores, ensure_ascii=False)
+                if candidate_engagement:
+                    clue.engagement_detail = json.dumps(candidate_engagement, ensure_ascii=False)
                 source_label = content.source_id or content.id
                 if source_label not in clue.summary:
                     clue.summary = f"{clue.summary} [来源:{source_label}]".strip()
                 if finding.get("suggested_tool_type"):
                     clue.suggested_tool_type = str(finding["suggested_tool_type"])
-                if clue.status == RadarClueStatus.dismissed and clue.level == RadarClueLevel.urgent:
+                if (
+                    clue.status == RadarClueStatus.dismissed
+                    and self._should_reopen(
+                        clue_type=clue_type,
+                        previous_level=previous_level,
+                        candidate_level=level,
+                        previous_summary=previous_summary,
+                        candidate_summary=str(finding.get("summary") or ""),
+                        previous_engagement=previous_engagement,
+                        candidate_engagement=candidate_engagement,
+                        suppressed_until=clue.suppressed_until,
+                    )
+                ):
                     clue.status = RadarClueStatus.pending
                     clue.suppressed_until = None
             clues.append(clue)
@@ -346,3 +365,45 @@ class RadarService:
         except (TypeError, ValueError):
             return []
         return [str(item) for item in data] if isinstance(data, list) else []
+
+    @staticmethod
+    def _json_dict(value: str) -> dict:
+        try:
+            data = json.loads(value or "{}")
+        except (TypeError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    @classmethod
+    def _should_reopen(
+        cls,
+        *,
+        clue_type: RadarClueType,
+        previous_level: RadarClueLevel,
+        candidate_level: RadarClueLevel,
+        previous_summary: str,
+        candidate_summary: str,
+        previous_engagement: dict,
+        candidate_engagement: dict,
+        suppressed_until: datetime | None,
+    ) -> bool:
+        if suppressed_until is None or suppressed_until <= datetime.now():
+            return True
+        if cls._max_level(previous_level, candidate_level) != previous_level:
+            return True
+
+        old_velocity = float(previous_engagement.get("velocity") or 0)
+        new_velocity = float(candidate_engagement.get("velocity") or 0)
+        if old_velocity > 0 and new_velocity >= old_velocity * 1.5:
+            return True
+
+        experience_types = {
+            RadarClueType.experience_update,
+            RadarClueType.experience_leak,
+            RadarClueType.qualification_change,
+        }
+        return (
+            clue_type in experience_types
+            and bool(candidate_summary)
+            and candidate_summary != previous_summary
+        )
