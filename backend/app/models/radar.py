@@ -42,6 +42,7 @@ class RadarClueStatus(str, enum.Enum):
     confirmed = "confirmed"
     dismissed = "dismissed"
     promoted = "promoted"
+    archived = "archived"
 
 
 class ContentScanState(Base):

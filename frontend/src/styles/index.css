@@ -2071,6 +2071,21 @@
   color: var(--text-muted);
 }
 
+.radar-keyword-priority,
+.radar-keyword-category,
+.radar-term-evidence {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.radar-keyword-priority.level_1 { color: #9f1239; background: #ffe4e6; }
+.radar-keyword-priority.level_2 { color: #92400e; background: #fef3c7; }
+.radar-keyword-priority.level_3 { color: #6d28d9; background: #ede9fe; }
+.radar-keyword-category { color: #334155; background: #e2e8f0; }
+.radar-term-evidence { color: #0369a1; background: #e0f2fe; }
+
 .radar-term-merged {
   font-size: 10px;
   color: #64748b;

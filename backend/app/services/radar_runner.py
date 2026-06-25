@@ -5,20 +5,60 @@ from datetime import datetime, timedelta
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.game import Game
 from app.models.platform_content import PlatformContent
 from app.models.radar import (
     ContentConcept,
     ContentMetricHourly,
     ContentMetricSnapshot,
     ContentScanState,
+    RadarClue,
+    RadarClueStatus,
+    RadarClueType,
 )
 from app.services.engagement_surge import EngagementSurgeDetector
+from app.services.demand_keyword_rules import match_demand_keywords, rules_for_game
 from app.services.radar import RadarService, normalize_concept
 from app.services.radar_model import RadarModelReviewer
 
 
 def exploration_interval_minutes(priority_weight: int) -> int:
     return 5 if int(priority_weight or 1) >= 3 else 30
+
+
+async def archive_nonstandard_radar_clues(session: AsyncSession) -> int:
+    """归档旧规则产生、无法映射到当前标准词库的待处理线索。"""
+    clues = (
+        await session.execute(
+            select(RadarClue).where(
+                RadarClue.status.in_([
+                    RadarClueStatus.pending,
+                    RadarClueStatus.confirmed,
+                ])
+            )
+        )
+    ).scalars().all()
+    games: dict[str, Game | None] = {}
+    archived = 0
+    for clue in clues:
+        if clue.game_id not in games:
+            games[clue.game_id] = await session.get(Game, clue.game_id)
+        game = games[clue.game_id]
+        standard_terms = (
+            {rule.canonical_term for rule in rules_for_game(game.name)}
+            if game is not None
+            else set()
+        )
+        if (
+            clue.clue_type != RadarClueType.new_demand
+            or clue.term not in standard_terms
+        ):
+            clue.status = RadarClueStatus.archived
+            clue.suppressed_until = None
+            archived += 1
+    if archived:
+        await session.commit()
+    return archived
 
 
 async def compact_metric_snapshots(
@@ -89,6 +129,7 @@ async def backfill_radar_history(session: AsyncSession) -> int:
         )
     ).scalars().all()
     radar = RadarService(session)
+    games: dict[str, Game | None] = {}
     for content in contents:
         session.add(ContentScanState(
             content_id=content.id,
@@ -105,13 +146,34 @@ async def backfill_radar_history(session: AsyncSession) -> int:
             comment_count=content.comment_count,
             share_count=content.share_count,
         ))
-        for concept in radar._extract_concepts(content):
+        if content.game_id not in games:
+            games[content.game_id] = await session.get(Game, content.game_id)
+        game = games[content.game_id]
+        if game is None:
+            continue
+        matches = match_demand_keywords(
+            game.name,
+            radar._content_text(content),
+        )
+        for match in matches:
+            if (
+                match.priority == "level_3"
+                and content.published_at >= datetime.now() - timedelta(days=7)
+            ):
+                await radar._apply_keyword_match(
+                    content,
+                    game,
+                    match,
+                    radar._content_text(content),
+                )
+                continue
+            concept = match.canonical_term
             normalized = normalize_concept(concept)
             existing = (
                 await session.execute(
                     select(ContentConcept).where(
                         ContentConcept.game_id == content.game_id,
-                        ContentConcept.concept_type == "new_term",
+                        ContentConcept.concept_type == "standard_keyword",
                         ContentConcept.normalized_value == normalized,
                     )
                 )
@@ -120,7 +182,7 @@ async def backfill_radar_history(session: AsyncSession) -> int:
                 session.add(ContentConcept(
                     game_id=content.game_id,
                     content_id=content.id,
-                    concept_type="new_term",
+                    concept_type="standard_keyword",
                     value=concept,
                     normalized_value=normalized,
                     occurrence_count=1,
@@ -129,6 +191,7 @@ async def backfill_radar_history(session: AsyncSession) -> int:
                 existing.occurrence_count += 1
                 existing.last_seen_at = datetime.now()
     await session.commit()
+    await archive_nonstandard_radar_clues(session)
     return len(contents)
 
 

@@ -15,6 +15,7 @@ from app.api.radar import (
     dismiss_radar_clue,
     get_radar_summary,
     list_radar_clues,
+    list_radar_clues_grouped,
     promote_radar_clue,
 )
 from app.database import Base
@@ -93,7 +94,12 @@ async def seed_clue() -> str:
             term="星蚀核心",
             trigger_reason="首次出现且需求意图明确",
             evidence_content_ids=json.dumps([content.id]),
-            score_detail=json.dumps({"novelty": 100, "demand_intent": 90}),
+            score_detail=json.dumps({
+                "keyword_priority": "level_1",
+                "keyword_category": "工具箱工具核心词",
+                "matched_alias": "星蚀核心",
+                "independent_evidence_count": 1,
+            }),
             suggested_tool_type="配装/战备工具",
             total_score=70,
         )
@@ -181,6 +187,19 @@ class RadarApiTest(unittest.TestCase):
 
         summary = asyncio.run(scenario())
         self.assertEqual(summary.coverage.new_contents, 0)
+
+    def test_grouped_clues_expose_standard_keyword_metadata(self):
+        async def scenario():
+            await seed_clue()
+            async with Session() as session:
+                return await list_radar_clues_grouped(db=session)
+
+        groups = asyncio.run(scenario())
+        term = groups[0]["clues"][0]
+        self.assertEqual(term["keyword_priority"], "level_1")
+        self.assertEqual(term["keyword_category"], "工具箱工具核心词")
+        self.assertEqual(term["matched_alias"], "星蚀核心")
+        self.assertEqual(term["evidence_count"], 1)
 
 
 if __name__ == "__main__":

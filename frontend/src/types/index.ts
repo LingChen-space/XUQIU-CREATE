@@ -282,7 +282,7 @@ export interface PipelineRunResult {
 }
 
 export type RadarClueLevel = "urgent" | "important" | "watch"
-export type RadarClueStatus = "pending" | "confirmed" | "dismissed" | "promoted"
+export type RadarClueStatus = "pending" | "confirmed" | "dismissed" | "promoted" | "archived"
 export type RadarClueType =
   | "new_term"
   | "new_demand"
@@ -323,7 +323,7 @@ export interface RadarClue {
   term: string
   trigger_reason: string
   evidence: RadarEvidence[]
-  scores: Record<string, number>
+  scores: Record<string, unknown>
   engagement: Record<string, unknown>
   suggested_tool_type: string
   total_score: number
@@ -352,6 +352,10 @@ export interface RadarGroupedTerm {
   demand_id: string | null
   status: RadarClueStatus
   merged_count: number
+  keyword_priority: "level_1" | "level_2" | "level_3" | ""
+  keyword_category: string
+  matched_alias: string
+  evidence_count: number
 }
 
 export interface RadarGameGroup {

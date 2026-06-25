@@ -1,0 +1,1417 @@
+{
+  "source": "重点游戏工具&攻略玩家需求词监控.xlsx",
+  "version": "2026-06-25",
+  "games": {
+    "三角洲行动": [
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "熟图工具"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "3X3任务"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "每日密码"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "卡战备"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "战绩查询"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "战备搭配"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "武器配件推荐"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "性价比装备"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "跑刀套装"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "玻璃大炮配装"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "护甲选择"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "枪械满改方案"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "交易行物价"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "物资价格查询"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "高价值物资清单"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "互动地图"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "撤离点位置"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "物资刷新点"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "保险箱位置"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "出生点位"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "架枪点位"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "搜刮路线规划"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "密室位置"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "地图资源标记"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "哈夫币收益计算"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "物资价值估算"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "开箱模拟器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "爆率统计"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "干员战力模拟"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "干员技能模拟器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "武器伤害计算器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "压枪参数"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "键位设置"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "对局路线规划工具"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "干员强度排行"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "机密对局打法"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "跑刀赚钱攻略"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "低成本起号"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "大坝地图打法"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "航天基地地图打法"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "BOSS赛伊德打法"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "撤离技巧"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "物资搬运路线"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "枪械伤害对比"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "防蹲点战术"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "交易行搬砖攻略"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "新手避坑"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "卡战备技巧"
+      }
+    ],
+    "失控进化": [
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "物资计算器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "建筑耗材统计"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "地基材料计算"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "房屋搭建模拟器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "防御工事配方表"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "全道具图鉴"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "武器配方"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "物资分布图"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "资源采集点位"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "载具刷新位置"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "科技树查询"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "饱食度计算器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "口渴值计算器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "装备耐久计算"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "抄家防御模拟"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "基地物资储量统计"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "开荒发育路线"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "独狼生存攻略"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "7天赛季发育节奏"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "基地防抄家建造方案"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "物资速刷点位"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "武器制作顺序"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "角色天赋加点"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "PVP对抗技巧"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "车辆改装配方"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "服务器清档囤货策略"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "情报等级速刷"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "单人孤岛生存教程"
+      }
+    ],
+    "异环": [
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "角色升级材料计算器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "突破材料统计"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "天赋加点模拟器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "DPS伤害计算器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "配队构建器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "循环伤害模拟"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "抽卡模拟器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "卡池时间表"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "保底计算"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "角色抽取性价比"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "资源规划计算器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "互动大地图"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "异象点位"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "隐藏宝箱"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "支线任务触发点"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "收集路线规划"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "武器词条筛选"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "异环词条筛选"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "毕业装备模拟器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "词条评分器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "阵容战力测算"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "T0角色强度排行"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "零氪开荒路线"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "体力分配方案"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "主线支线全流程"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "异象机制解析"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "倾陷值输出手法"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "环合系数机制"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "商铺经营赚钱攻略"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "房产玩法"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "版本配队"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "平民阵容"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "角色命座优先级"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "材料速刷路线"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "隐藏彩蛋收集"
+      }
+    ],
+    "洛克王国世界": [
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "S3赛季"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "异色日记"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "异色抓取"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "战绩查询"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "孵蛋查询"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "家园查询"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "精灵图鉴"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "种族值查询"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "性格计算器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "个体值测算"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "克制关系表"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "进化路线图"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "蛋组配对计算器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "培养成本统计"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "阵容配对器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "队伍战力评估"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "伤害模拟"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "属性克制模拟器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "PVP阵容一键复制"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "互动地图"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "精灵分布点位"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "宝箱资源位置"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "采集点标记"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "传送点解锁路线"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "任务清单工具"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "道具掉落查询"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "装备图鉴"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "技能表查询"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "学习机获取位置"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "开荒强力精灵推荐"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "异色宠物捕捉位置"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "PVP上分阵容"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "平民宠物培养方案"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "野外BOSS打法"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "地图全收集攻略"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "宠物刷资质技巧"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "血脉搭配"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "技能配置"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "秘境通关打法"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "新手冲级路线"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "卡等级解决方案"
+      }
+    ],
+    "原神": [
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "角色突破材料"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "天赋材料统计"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "体力规划器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "树脂收益计算"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "圣遗物评分器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "伤害模拟器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "祈愿模拟器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "原石消耗测算"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "卡池预测"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "命座收益计算"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "互动地图"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "神瞳位置"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "宝箱路线"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "世界任务触发点"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "资源循环采集路线"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "武器对比"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "圣遗物词条推荐"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "元素反应模拟器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "队伍循环轴计时工具"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "版本T0角色排行"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "平民配队"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "深渊满星阵容"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "零氪开荒攻略"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "材料速刷路线"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "元素反应手法"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "世界BOSS打法"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "秘境通关"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "神瞳全收集"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "隐藏任务"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "每日委托最优路线"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "武器精炼优先级"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "四星角色培养方案"
+      }
+    ],
+    "鸣潮": [
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "角色升级材料"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "声骸评分器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "伤害循环计算器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "共鸣链加点模拟器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "武器对比测算"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "互动地图"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "声骸资源点"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "宝箱位置"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "残象刷新点位"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "探索路线规划"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "抽卡模拟器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "保底概率计算"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "资源消耗统计"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "输出轴模拟"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "队伍循环计时"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "抗性测算"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "角色强度榜单"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "开荒角色推荐"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "平民阵容搭配"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "深渊幻境打法"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "声骸毕业词条"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "BOSS破韧手法"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "全地图收集攻略"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "漂泊者养成路线"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "联机打法"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "每日体力最优分配"
+      }
+    ],
+    "崩坏：星穹铁道": [
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "角色突破材料"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "行迹材料计算器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "开拓力规划"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "遗器评分工具"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "伤害DPS模拟器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "速度轴计算工具"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "跃迁模拟器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "光锥抽取测算"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "星魂收益计算"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "星琼消耗统计"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "卡池排期查询"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "星槎海互动地图"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "宝箱点位"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "扑满点位"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "任务路线"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "模拟宇宙收益计算器"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "忘却之庭阵容模拟"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "破韧计算"
+      },
+      {
+        "category": "工具箱工具核心词",
+        "priority": "level_1",
+        "term": "队伍循环搭配模拟器"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "版本角色强度排行"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "忘却之庭满星阵容"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "平民配队"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "模拟宇宙通关套路"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "遗器刷取路线"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "行迹加点优先级"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "光锥选择推荐"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "角色星魂性价比"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "开荒流程"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "活动任务全攻略"
+      },
+      {
+        "category": "攻略内容长尾词",
+        "priority": "level_2",
+        "term": "遗器副词条选择"
+      }
+    ]
+  },
+  "generic": [
+    {
+      "category": "工具类通用热搜词",
+      "priority": "level_1",
+      "term": "战绩查询"
+    },
+    {
+      "category": "工具类通用热搜词",
+      "priority": "level_1",
+      "term": "组队交友"
+    },
+    {
+      "category": "工具类通用热搜词",
+      "priority": "level_1",
+      "term": "抽卡分析"
+    },
+    {
+      "category": "工具类通用热搜词",
+      "priority": "level_1",
+      "term": "阵容搭配"
+    },
+    {
+      "category": "工具类通用热搜词",
+      "priority": "level_1",
+      "term": "机型检测"
+    },
+    {
+      "category": "工具类通用热搜词",
+      "priority": "level_1",
+      "term": "兑换码"
+    },
+    {
+      "category": "工具类通用热搜词",
+      "priority": "level_1",
+      "term": "礼包码"
+    },
+    {
+      "category": "工具类通用热搜词",
+      "priority": "level_1",
+      "term": "材料计算器"
+    },
+    {
+      "category": "工具类通用热搜词",
+      "priority": "level_1",
+      "term": "地图点位"
+    },
+    {
+      "category": "工具类通用热搜词",
+      "priority": "level_1",
+      "term": "图鉴查询"
+    },
+    {
+      "category": "工具类通用热搜词",
+      "priority": "level_1",
+      "term": "抽卡模拟器"
+    },
+    {
+      "category": "工具类通用热搜词",
+      "priority": "level_1",
+      "term": "伤害计算"
+    },
+    {
+      "category": "工具类通用热搜词",
+      "priority": "level_1",
+      "term": "阵容模拟器"
+    },
+    {
+      "category": "工具类通用热搜词",
+      "priority": "level_1",
+      "term": "资源路线"
+    },
+    {
+      "category": "工具类通用热搜词",
+      "priority": "level_1",
+      "term": "养成规划"
+    },
+    {
+      "category": "工具类通用热搜词",
+      "priority": "level_1",
+      "term": "词条评分"
+    },
+    {
+      "category": "工具类通用热搜词",
+      "priority": "level_1",
+      "term": "战力测算"
+    },
+    {
+      "category": "工具类通用热搜词",
+      "priority": "level_1",
+      "term": "开荒路线规划器"
+    },
+    {
+      "category": "攻略类通用热搜词",
+      "priority": "level_1",
+      "term": "新手开荒攻略"
+    },
+    {
+      "category": "攻略类通用热搜词",
+      "priority": "level_1",
+      "term": "零氪平民玩法"
+    },
+    {
+      "category": "攻略类通用热搜词",
+      "priority": "level_1",
+      "term": "版本强势阵容"
+    },
+    {
+      "category": "攻略类通用热搜词",
+      "priority": "level_1",
+      "term": "角色强度排行"
+    },
+    {
+      "category": "攻略类通用热搜词",
+      "priority": "level_1",
+      "term": "材料速刷"
+    },
+    {
+      "category": "攻略类通用热搜词",
+      "priority": "level_1",
+      "term": "BOSS打法"
+    },
+    {
+      "category": "攻略类通用热搜词",
+      "priority": "level_1",
+      "term": "全收集攻略"
+    },
+    {
+      "category": "攻略类通用热搜词",
+      "priority": "level_1",
+      "term": "体力分配"
+    },
+    {
+      "category": "攻略类通用热搜词",
+      "priority": "level_1",
+      "term": "避坑指南"
+    },
+    {
+      "category": "攻略类通用热搜词",
+      "priority": "level_1",
+      "term": "隐藏奖励"
+    },
+    {
+      "category": "攻略类通用热搜词",
+      "priority": "level_1",
+      "term": "活动流程"
+    },
+    {
+      "category": "攻略类通用热搜词",
+      "priority": "level_1",
+      "term": "氪金性价比"
+    },
+    {
+      "category": "长尾负面&热点词",
+      "priority": "level_3",
+      "term": "版本更新内容"
+    },
+    {
+      "category": "长尾负面&热点词",
+      "priority": "level_3",
+      "term": "BUG修复"
+    },
+    {
+      "category": "长尾负面&热点词",
+      "priority": "level_3",
+      "term": "角色削弱"
+    },
+    {
+      "category": "长尾负面&热点词",
+      "priority": "level_3",
+      "term": "角色加强"
+    },
+    {
+      "category": "长尾负面&热点词",
+      "priority": "level_3",
+      "term": "搬砖赚钱方法"
+    },
+    {
+      "category": "长尾负面&热点词",
+      "priority": "level_3",
+      "term": "刷资源技巧"
+    },
+    {
+      "category": "长尾负面&热点词",
+      "priority": "level_3",
+      "term": "卡机制方法"
+    },
+    {
+      "category": "长尾负面&热点词",
+      "priority": "level_3",
+      "term": "开局避坑"
+    },
+    {
+      "category": "长尾负面&热点词",
+      "priority": "level_3",
+      "term": "新手容易踩的坑"
+    }
+  ]
+}

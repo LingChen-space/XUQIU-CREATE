@@ -12,10 +12,20 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.database import Base
 from app.models.game import Game, GameGenre, GameStatus
 from app.models.platform_content import ContentPlatform, ContentType, PlatformContent
-from app.models.radar import ContentMetricHourly, ContentMetricSnapshot, ContentScanState
+from app.models.radar import (
+    ContentConcept,
+    ContentMetricHourly,
+    ContentMetricSnapshot,
+    ContentScanState,
+    RadarClue,
+    RadarClueLevel,
+    RadarClueStatus,
+    RadarClueType,
+)
 from app.services.data_adapter import DataAdapter, exploration_keywords_for_game
 from app.services.radar_runner import (
     backfill_radar_history,
+    archive_nonstandard_radar_clues,
     compact_metric_snapshots,
     exploration_interval_minutes,
 )
@@ -128,7 +138,7 @@ class RadarIngestTest(unittest.TestCase):
                     platform=ContentPlatform.taptap,
                     content_type=ContentType.post,
                     source_id="history-source",
-                    title="「星蚀核心」首次曝光",
+                    title="战绩查询工具",
                     view_count=100,
                     like_count=10,
                     comment_count=3,
@@ -142,9 +152,46 @@ class RadarIngestTest(unittest.TestCase):
                 snapshots = (
                     await session.execute(select(func.count()).select_from(ContentMetricSnapshot))
                 ).scalar_one()
-                return result, state.rule_status, state.model_status, snapshots
+                concepts = (
+                    await session.execute(select(func.count()).select_from(ContentConcept))
+                ).scalar_one()
+                clues = (
+                    await session.execute(select(func.count()).select_from(RadarClue))
+                ).scalar_one()
+                return result, state.rule_status, state.model_status, snapshots, concepts, clues
 
-        self.assertEqual(asyncio.run(scenario()), (1, "completed", "completed", 1))
+        self.assertEqual(asyncio.run(scenario()), (1, "completed", "completed", 1, 1, 0))
+
+    def test_history_backfill_only_alerts_recent_level_three_keyword(self):
+        async def scenario():
+            game_id = await seed_game()
+            async with Session() as session:
+                recent = PlatformContent(
+                    game_id=game_id,
+                    platform=ContentPlatform.taptap,
+                    content_type=ContentType.post,
+                    source_id="recent-hot",
+                    title="2.0版本更新内容将在6月28日上线",
+                    published_at=datetime.now(),
+                )
+                old = PlatformContent(
+                    game_id=game_id,
+                    platform=ContentPlatform.taptap,
+                    content_type=ContentType.post,
+                    source_id="old-hot",
+                    title="1.0版本更新内容与BUG修复",
+                    published_at=datetime.now() - timedelta(days=8),
+                )
+                session.add_all([recent, old])
+                await session.commit()
+                await backfill_radar_history(session)
+                clues = (await session.execute(select(RadarClue))).scalars().all()
+                return [(clue.term, clue.level) for clue in clues]
+
+        self.assertEqual(
+            asyncio.run(scenario()),
+            [("版本更新内容", RadarClueLevel.urgent)],
+        )
 
     def test_metric_snapshots_older_than_thirty_days_are_compacted_hourly(self):
         async def scenario():
@@ -202,6 +249,40 @@ class RadarIngestTest(unittest.TestCase):
                 return result, raw_count, hourly.view_count, hourly.like_count
 
         self.assertEqual(asyncio.run(scenario()), ((2, 1), 1, 180, 15))
+
+    def test_legacy_nonstandard_clues_are_archived(self):
+        async def scenario():
+            game_id = await seed_game()
+            async with Session() as session:
+                session.add_all([
+                    RadarClue(
+                        signature="legacy-free",
+                        game_id=game_id,
+                        clue_type=RadarClueType.new_term,
+                        level=RadarClueLevel.watch,
+                        status=RadarClueStatus.pending,
+                        title="旧自由词",
+                        term="模型发明词",
+                    ),
+                    RadarClue(
+                        signature="standard-generic",
+                        game_id=game_id,
+                        clue_type=RadarClueType.new_demand,
+                        level=RadarClueLevel.important,
+                        status=RadarClueStatus.pending,
+                        title="标准词",
+                        term="战绩查询",
+                    ),
+                ])
+                await session.commit()
+                count = await archive_nonstandard_radar_clues(session)
+                clues = (await session.execute(select(RadarClue))).scalars().all()
+                return count, {clue.term: clue.status for clue in clues}
+
+        count, statuses = asyncio.run(scenario())
+        self.assertEqual(count, 1)
+        self.assertEqual(statuses["模型发明词"], RadarClueStatus.archived)
+        self.assertEqual(statuses["战绩查询"], RadarClueStatus.pending)
 
 
 if __name__ == "__main__":

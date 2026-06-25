@@ -18,6 +18,10 @@ from app.models.game import Game
 from app.models.platform_content import PlatformContent
 from app.models.demand_signal import DemandSignal
 from app.models.demand import Demand, DemandStatus, ToolType
+from app.services.demand_keyword_rules import (
+    canonical_game_name,
+    match_demand_keywords,
+)
 from app.services.signal_engine import SignalEngine
 from app.utils.engagement import compute_content_hot_score
 
@@ -547,25 +551,97 @@ class LLMPipeline:
         return result.scalars().all()
 
     async def _analyze_game_demands(self, game: Game, window_date: date) -> list[dict]:
-        """对一款游戏产出一个或多个需求分析结果。"""
+        """只按标准词库产出候选分析；正式需求必须由雷达人工升级。"""
         contents = await self._get_recent_contents(game.id, window_date)
-        if len(contents) < 2:
+        if not contents:
             return []
 
         signals = await self.engine.get_signals_for_game(game.id, window_date)
+        return self._keyword_analysis_from_contents(game, contents, signals)
 
-        if self.client:
-            contents_text = self._format_contents_for_prompt(contents[:20])
-            signals_text = self._format_signals_for_prompt(signals)
-            analysis = await self._call_llm(game.name, contents_text, signals_text)
-            return [analysis] if analysis else []
+    def _keyword_analysis_from_contents(
+        self,
+        game: Game,
+        contents: list[PlatformContent],
+        signals: dict,
+    ) -> list[dict]:
+        """将内容命中归一到标准需求词，禁止自由主题和信号兜底创建方向。"""
+        grouped: dict[str, dict] = {}
+        for content in contents:
+            if not _content_belongs_to_game(
+                game.name,
+                content.title or "",
+                content.body or "",
+            ):
+                continue
+            text = f"{content.title or ''} {content.body or ''}"
+            for match in match_demand_keywords(game.name, text):
+                stat = grouped.setdefault(match.canonical_term, {
+                    "rule": match.rule,
+                    "contents": [],
+                    "aliases": set(),
+                })
+                if content.id not in {item.id for item in stat["contents"]}:
+                    stat["contents"].append(content)
+                stat["aliases"].add(match.matched_alias)
 
-        analyses = self._theme_analysis_from_contents(game, contents, signals)
-        if analyses:
-            return analyses
-
-        fallback = self._fallback_analysis(game, signals)
-        return [fallback] if fallback else []
+        analyses: list[dict] = []
+        is_priority_game = canonical_game_name(game.name) is not None
+        for canonical_term, stat in grouped.items():
+            rule = stat["rule"]
+            matched_contents = stat["contents"]
+            if rule.priority == "level_2" and len(matched_contents) < 2:
+                continue
+            if (
+                rule.priority == "level_3"
+                and all(
+                    content.published_at < datetime.now() - timedelta(days=7)
+                    for content in matched_contents
+                )
+            ):
+                continue
+            base_score = {
+                "level_1": 70,
+                "level_2": 60,
+                "level_3": 65,
+            }[rule.priority]
+            source_bonus = 8 if len(matched_contents) >= 2 else 0
+            source_bonus += min(7, max(0, len(matched_contents) - 2) * 3)
+            potential_score = min(
+                100,
+                base_score + source_bonus + (5 if is_priority_game else 0),
+            )
+            evidence_posts = sorted(
+                matched_contents,
+                key=lambda content: float(content.hot_score or 0),
+                reverse=True,
+            )[:5]
+            analyses.append({
+                "high_freq_questions": [
+                    content.title for content in evidence_posts if content.title
+                ],
+                "info_gap": f"内容明确命中标准需求词「{canonical_term}」，需将分散信息整理为可直接使用的产品能力。",
+                "tool_feasibility": 4 if "工具" in rule.category else 3,
+                "tool_type_suggestion": rule.suggested_tool_type,
+                "tool_title": f"{game.name}{canonical_term}",
+                "tool_description": f"围绕「{canonical_term}」聚合信息并提供对应工具或攻略能力。",
+                "reasoning": (
+                    f"{len(matched_contents)}条独立内容命中"
+                    f"{'、'.join(sorted(stat['aliases']))}，统一归一为「{canonical_term}」。"
+                ),
+                "potential_score": potential_score,
+                "evidence_post_ids": [content.id for content in evidence_posts],
+                "standard_term": canonical_term,
+                "keyword_priority": rule.priority,
+                "keyword_category": rule.category,
+                "allow_auto_promote": False,
+                "signal_snapshot": signals,
+            })
+        return sorted(
+            analyses,
+            key=lambda item: item["potential_score"],
+            reverse=True,
+        )
 
     def _format_contents_for_prompt(self, contents: list[PlatformContent]) -> str:
         """构建 LLM 提示词里的内容列表。"""
@@ -844,6 +920,8 @@ class LLMPipeline:
             evidence_posts = ev_result.scalars().all()
 
             for analysis in analyses:
+                if not analysis.get("allow_auto_promote", False):
+                    continue
                 # 解析 tool_type
                 tool_type_str = analysis.get("tool_type_suggestion", "其他")
                 try:
