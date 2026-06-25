@@ -87,7 +87,7 @@ async def run_daily_pipeline(force_recrawl: bool = False):
     async with async_session() as session:
         try:
             # --- Step 0: 外部监控后台同步 ---
-            # 外部后台内容不依赖本地搜索词配置，同步可能自动创建新游戏。
+            # 外部后台内容不依赖本地搜索词配置，仅匹配游戏管理中已有游戏。
             external_sync = await TapKbForumSyncService(session).sync(
                 days=30,
                 force=force_recrawl,

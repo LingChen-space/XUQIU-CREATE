@@ -214,7 +214,7 @@ class ExternalMonitorSyncTest(unittest.TestCase):
 
         self.assertEqual(result["contents"]["inserted"], 0)
         self.assertEqual(result["contents"]["unmatched_games"], 1)
-        self.assertEqual(result["contents"]["created_games"], 0)
+        self.assertNotIn("created_games", result["contents"])
         games = asyncio.run(fetch_games())
         self.assertNotIn(game_name, {g.name for g in games})
         self.assertEqual(len(asyncio.run(fetch_contents())), 0)
@@ -241,7 +241,6 @@ class ExternalMonitorSyncTest(unittest.TestCase):
 
         self.assertEqual(result["contents"]["inserted"], 0)
         self.assertEqual(result["contents"]["unmatched_games"], 1)
-        self.assertEqual(result["contents"]["created_games"], 0)
         games = asyncio.run(fetch_games())
         self.assertNotIn(game_name, {g.name for g in games})
         self.assertEqual(len(asyncio.run(fetch_contents())), 0)
@@ -275,7 +274,6 @@ class ExternalMonitorSyncTest(unittest.TestCase):
         result = asyncio.run(run_sync(client))
 
         self.assertEqual(result["contents"]["inserted"], 2)
-        self.assertEqual(result["contents"]["created_games"], 0)
         games = {game.id: game.name for game in asyncio.run(fetch_games())}
         rows = asyncio.run(fetch_contents())
         self.assertEqual({games[row.game_id] for row in rows}, {"\u6d1b\u514b\u738b\u56fd\u4e16\u754c", "\u7edd\u533a\u96f6"})

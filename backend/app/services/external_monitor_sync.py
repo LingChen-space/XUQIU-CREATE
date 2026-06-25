@@ -39,7 +39,6 @@ LAST_SYNC_STATUS: dict[str, Any] = {
         "duplicates": 0,
         "unmatched_games": 0,
         "invalid": 0,
-        "created_games": 0,
     },
     "configs": {
         "fetched": 0,
@@ -628,7 +627,6 @@ class TapKbForumSyncService:
             "duplicates": 0,
             "unmatched_games": 0,
             "invalid": 0,
-            "created_games": 0,
         }
 
     @staticmethod
