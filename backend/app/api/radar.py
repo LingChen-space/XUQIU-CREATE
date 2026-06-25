@@ -173,6 +173,7 @@ async def list_radar_clues_grouped(
         group = groups.setdefault(
             clue.game_id, {"game": game, "terms": {}}
         )
+        keyword_detail = _json_object(clue.score_detail)
         cur = group["terms"].get(norm)
         if cur is None:
             group["terms"][norm] = {
@@ -184,6 +185,13 @@ async def list_radar_clues_grouped(
                 "demand_id": clue.demand_id,
                 "status": clue.status.value,
                 "merged_count": 1,
+                "keyword_priority": keyword_detail.get("keyword_priority", ""),
+                "keyword_category": keyword_detail.get("keyword_category", ""),
+                "matched_alias": keyword_detail.get("matched_alias", ""),
+                "evidence_count": int(
+                    keyword_detail.get("independent_evidence_count")
+                    or len(_json_list(clue.evidence_content_ids))
+                ),
             }
         else:
             cur["merged_count"] += 1
@@ -195,6 +203,13 @@ async def list_radar_clues_grouped(
                 cur["clue_type"] = clue.clue_type.value
                 cur["demand_id"] = clue.demand_id
                 cur["status"] = clue.status.value
+                cur["keyword_priority"] = keyword_detail.get("keyword_priority", "")
+                cur["keyword_category"] = keyword_detail.get("keyword_category", "")
+                cur["matched_alias"] = keyword_detail.get("matched_alias", "")
+                cur["evidence_count"] = int(
+                    keyword_detail.get("independent_evidence_count")
+                    or len(_json_list(clue.evidence_content_ids))
+                )
             # 等级取组内最高（urgent > important > watch）
             if _LEVEL_RANK.get(clue.level, 9) < _LEVEL_RANK.get(
                 RadarClueLevel(cur["level"]), 9

@@ -12,7 +12,14 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.database import Base
 from app.models.game import Game, GameGenre, GameStatus
 from app.models.platform_content import ContentPlatform, ContentType, PlatformContent
-from app.models.radar import ContentMetricHourly, ContentMetricSnapshot, ContentScanState
+from app.models.radar import (
+    ContentConcept,
+    ContentMetricHourly,
+    ContentMetricSnapshot,
+    ContentScanState,
+    RadarClue,
+    RadarClueLevel,
+)
 from app.services.data_adapter import DataAdapter, exploration_keywords_for_game
 from app.services.radar_runner import (
     backfill_radar_history,
@@ -128,7 +135,7 @@ class RadarIngestTest(unittest.TestCase):
                     platform=ContentPlatform.taptap,
                     content_type=ContentType.post,
                     source_id="history-source",
-                    title="「星蚀核心」首次曝光",
+                    title="战绩查询工具",
                     view_count=100,
                     like_count=10,
                     comment_count=3,
@@ -142,9 +149,46 @@ class RadarIngestTest(unittest.TestCase):
                 snapshots = (
                     await session.execute(select(func.count()).select_from(ContentMetricSnapshot))
                 ).scalar_one()
-                return result, state.rule_status, state.model_status, snapshots
+                concepts = (
+                    await session.execute(select(func.count()).select_from(ContentConcept))
+                ).scalar_one()
+                clues = (
+                    await session.execute(select(func.count()).select_from(RadarClue))
+                ).scalar_one()
+                return result, state.rule_status, state.model_status, snapshots, concepts, clues
 
-        self.assertEqual(asyncio.run(scenario()), (1, "completed", "completed", 1))
+        self.assertEqual(asyncio.run(scenario()), (1, "completed", "completed", 1, 1, 0))
+
+    def test_history_backfill_only_alerts_recent_level_three_keyword(self):
+        async def scenario():
+            game_id = await seed_game()
+            async with Session() as session:
+                recent = PlatformContent(
+                    game_id=game_id,
+                    platform=ContentPlatform.taptap,
+                    content_type=ContentType.post,
+                    source_id="recent-hot",
+                    title="2.0版本更新内容将在6月28日上线",
+                    published_at=datetime.now(),
+                )
+                old = PlatformContent(
+                    game_id=game_id,
+                    platform=ContentPlatform.taptap,
+                    content_type=ContentType.post,
+                    source_id="old-hot",
+                    title="1.0版本更新内容与BUG修复",
+                    published_at=datetime.now() - timedelta(days=8),
+                )
+                session.add_all([recent, old])
+                await session.commit()
+                await backfill_radar_history(session)
+                clues = (await session.execute(select(RadarClue))).scalars().all()
+                return [(clue.term, clue.level) for clue in clues]
+
+        self.assertEqual(
+            asyncio.run(scenario()),
+            [("版本更新内容", RadarClueLevel.urgent)],
+        )
 
     def test_metric_snapshots_older_than_thirty_days_are_compacted_hourly(self):
         async def scenario():

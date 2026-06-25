@@ -119,6 +119,32 @@ class DemandThemeAnalysisTest(unittest.TestCase):
         tool_types = {a["tool_type_suggestion"] for a in analyses}
         self.assertIn("配装/战备工具", tool_types)
         self.assertIn("交互地图", tool_types)
+        self.assertTrue(all(a["allow_auto_promote"] is False for a in analyses))
+        self.assertEqual(
+            {a["standard_term"] for a in analyses},
+            {"卡战备", "地图点位"},
+        )
+
+    def test_non_priority_game_analysis_only_uses_generic_terms(self):
+        analyses = self.pipeline._keyword_analysis_from_contents(
+            SimpleNamespace(name="测试新游戏", priority_weight=1),
+            [
+                content(
+                    "测试新游戏战绩查询和圣遗物评分器",
+                    "",
+                    100,
+                    50,
+                    5000,
+                    "a",
+                ),
+            ],
+            {},
+        )
+
+        self.assertEqual(
+            {analysis["standard_term"] for analysis in analyses},
+            {"战绩查询"},
+        )
 
     def test_locke_domain_terms_create_breeding_mechanism_demand(self):
         analyses = self.pipeline._theme_analysis_from_contents(

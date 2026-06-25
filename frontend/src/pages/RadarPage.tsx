@@ -11,6 +11,12 @@ const LEVEL_LABEL: Record<RadarClueLevel, string> = {
   watch: "观察",
 }
 
+const PRIORITY_LABEL: Record<string, string> = {
+  level_1: "一级核心",
+  level_2: "二级长尾",
+  level_3: "三级热点",
+}
+
 export default function RadarPage() {
   const [groups, setGroups] = useState<RadarGameGroup[] | null>(null)
   const [loading, setLoading] = useState(true)
@@ -22,6 +28,8 @@ export default function RadarPage() {
   const [days, setDays] = useState("")
   const [minScore, setMinScore] = useState("0")
   const [perGame, setPerGame] = useState("10")
+  const [keywordPriority, setKeywordPriority] = useState("")
+  const [keywordCategory, setKeywordCategory] = useState("")
 
   const refresh = async (showLoading = false) => {
     if (showLoading) setLoading(true)
@@ -77,7 +85,19 @@ export default function RadarPage() {
     )
   }
 
-  const totalTerms = groups.reduce((sum, g) => sum + g.count, 0)
+  const categories = Array.from(new Set(
+    groups.flatMap((group) => group.clues.map((term) => term.keyword_category).filter(Boolean))
+  ))
+  const visibleGroups = groups
+    .map((group) => {
+      const clues = group.clues.filter((term) =>
+        (!keywordPriority || term.keyword_priority === keywordPriority)
+        && (!keywordCategory || term.keyword_category === keywordCategory)
+      )
+      return { ...group, clues, count: clues.length }
+    })
+    .filter((group) => group.count > 0)
+  const totalTerms = visibleGroups.reduce((sum, g) => sum + g.count, 0)
 
   return (
     <div className="radar-page">
@@ -108,21 +128,35 @@ export default function RadarPage() {
             <option value="">全部</option>
           </select>
         </label>
+        <label>词级
+          <select value={keywordPriority} onChange={(e) => setKeywordPriority(e.target.value)}>
+            <option value="">全部</option>
+            <option value="level_1">一级核心</option>
+            <option value="level_2">二级长尾</option>
+            <option value="level_3">三级热点</option>
+          </select>
+        </label>
+        <label>类别
+          <select value={keywordCategory} onChange={(e) => setKeywordCategory(e.target.value)}>
+            <option value="">全部</option>
+            {categories.map((category) => <option value={category} key={category}>{category}</option>)}
+          </select>
+        </label>
       </div>
 
       <div className="radar-page-overview">
-        <span><Radar size={14} /> {groups.length} 个游戏 · {totalTerms} 个需求词</span>
-        <span className="radar-page-hint">同游戏下近义词已合并；点「升级」将需求词转为正式需求</span>
+        <span><Radar size={14} /> {visibleGroups.length} 个游戏 · {totalTerms} 个标准需求词</span>
+        <span className="radar-page-hint">严格按业务词库识别；固定近义词统一归一到标准词</span>
       </div>
 
-      {groups.length === 0 ? (
+      {visibleGroups.length === 0 ? (
         <div className="radar-page-empty">
           <Eye size={18} />
           当前过滤条件下暂无需求词
         </div>
       ) : (
         <div className="radar-page-groups">
-          {groups.map((g) => (
+          {visibleGroups.map((g) => (
             <section className="radar-game-group" key={g.game_id}>
               <header className="radar-game-group-head">
                 <span className="radar-game-name">{g.game_name}</span>
@@ -134,7 +168,20 @@ export default function RadarPage() {
                   <div className={`radar-term-chip ${term.level}`} key={term.id}>
                     <span className={`radar-level-badge ${term.level}`}>{LEVEL_LABEL[term.level]}</span>
                     <span className="radar-term-text" title={term.term}>{term.term}</span>
+                    {term.keyword_priority && (
+                      <span className={`radar-keyword-priority ${term.keyword_priority}`}>
+                        {PRIORITY_LABEL[term.keyword_priority]}
+                      </span>
+                    )}
+                    {term.keyword_category && (
+                      <span className="radar-keyword-category" title={term.keyword_category}>
+                        {term.keyword_category.includes("工具") ? "工具" : term.keyword_category.includes("攻略") ? "攻略" : "热点"}
+                      </span>
+                    )}
                     <span className="radar-term-score">{Math.round(term.total_score)}</span>
+                    <span className="radar-term-evidence" title={`独立证据 ${term.evidence_count} 条`}>
+                      {term.evidence_count}证据
+                    </span>
                     {term.merged_count > 1 && (
                       <span className="radar-term-merged" title={`${term.merged_count} 条近义线索合并`}>
                         {term.merged_count}条
