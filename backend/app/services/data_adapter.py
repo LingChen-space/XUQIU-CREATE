@@ -5,6 +5,7 @@
 
 import json
 import logging
+import re
 import uuid
 from datetime import datetime, timedelta
 from typing import Optional
@@ -20,6 +21,7 @@ from app.models.platform_content import PlatformContent, ContentPlatform, Conten
 from app.models.platform_search_config import PlatformSearchConfig
 from app.models.crawl_progress import CrawlProgress
 from app.models.radar import ContentMetricSnapshot, ContentScanState, RadarCollectionState
+from app.services.demand_keyword_rules import rules_for_game
 from app.services.llm_pipeline import _alias_group_for_game
 from app.utils.engagement import compute_content_hot_score
 
@@ -92,6 +94,64 @@ def exploration_keywords_for_game(game_name: str) -> list[str]:
         seen.add(normalized)
         keywords.append(normalized)
     return keywords
+
+
+def _rotating_slice(items: list[str], size: int, slot: int) -> list[str]:
+    if not items or size <= 0:
+        return []
+    start = (max(0, slot) * size) % len(items)
+    return [items[(start + offset) % len(items)] for offset in range(min(size, len(items)))]
+
+
+def collection_keywords_for_game(
+    game_name: str,
+    priority_group: str,
+    *,
+    slot: int | None = None,
+) -> list[str]:
+    """生成带游戏名约束的分级需求词查询，并分批轮转控制采集量。"""
+    current_slot = slot
+    if current_slot is None:
+        interval = 300 if priority_group == "priority" else 1800
+        current_slot = int(datetime.now().timestamp() // interval)
+
+    rules = rules_for_game(game_name)
+    level_one = [rule.canonical_term for rule in rules if rule.priority == "level_1"]
+    level_two = [rule.canonical_term for rule in rules if rule.priority == "level_2"]
+    hotspots = [rule.canonical_term for rule in rules if rule.priority == "level_3"]
+
+    if priority_group == "priority":
+        selected = [
+            *_rotating_slice(level_one, 4, current_slot),
+            *_rotating_slice(level_two, 2, current_slot),
+            *_rotating_slice(hotspots, 2, current_slot),
+        ]
+    else:
+        selected = [
+            *_rotating_slice(level_one, 6, current_slot),
+            *_rotating_slice(hotspots, 2, current_slot),
+        ]
+
+    queries = exploration_keywords_for_game(game_name)
+    seen = set(queries)
+    for term in selected:
+        query = f"{game_name} {term}".strip()
+        if query not in seen:
+            seen.add(query)
+            queries.append(query)
+    return queries
+
+
+def _exploration_item_belongs_to_game(game_name: str, item: dict) -> bool:
+    text = f"{item.get('title', '')} {item.get('video_desc', '')} "
+    text += f"{item.get('summary', '')} {item.get('description', '')}"
+    normalized = re.sub(r"[\s:：·\-—]", "", text).lower()
+    aliases = {
+        re.sub(r"[\s:：·\-—]", "", alias).lower()
+        for alias in _alias_group_for_game(game_name)
+        if alias
+    }
+    return any(alias and alias in normalized for alias in aliases)
 
 
 # --- Mock 数据（开发阶段无监控服务时的回退） ---
@@ -1014,7 +1074,10 @@ class DataAdapter:
                     mapped: list[dict] = []
                     keyword_errors: list[str] = []
                     successful_calls = 0
-                    for keyword in exploration_keywords_for_game(game.name):
+                    for keyword in collection_keywords_for_game(
+                        game.name,
+                        priority_group,
+                    ):
                         try:
                             items = await self._call_monitor(
                                 platform,
@@ -1023,6 +1086,11 @@ class DataAdapter:
                                 getattr(config, "proxy_url", None),
                             )
                             successful_calls += 1
+                            items = [
+                                item
+                                for item in items
+                                if _exploration_item_belongs_to_game(game.name, item)
+                            ]
                             mapped.extend({
                                 **self._map_monitor_item(
                                     game.id,
