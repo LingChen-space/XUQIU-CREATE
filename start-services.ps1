@@ -12,6 +12,12 @@ if (-not (Test-Path $Python312)) {
     $Python312 = (Get-Command python.exe -ErrorAction Stop).Source
 }
 
+# Backend runs on the system Python 3.14 — backend\.venv is broken, and pointing
+# PYTHONPATH at its site-packages makes uvicorn fail to import. The system Python
+# already has fastapi/uvicorn/sqlalchemy installed. Resolve this before PATH is
+# cleared below, so Start-Process gets an absolute path that does not rely on PATH.
+$SystemPython = (Get-Command python.exe -ErrorAction Stop).Source
+
 $NodeExe = (Get-Command node.exe -ErrorAction SilentlyContinue).Source
 if (-not $NodeExe -and (Test-Path "F:\node.js\node.exe")) {
     $NodeExe = "F:\node.js\node.exe"
@@ -53,11 +59,13 @@ function Start-Backend {
         return
     }
 
-    $env:PYTHONPATH = (Join-Path $Root "backend\.venv\Lib\site-packages") + ";" + (Join-Path $Root "backend")
-    $env:VIRTUAL_ENV = Join-Path $Root "backend\.venv"
+    # Use the system Python 3.14. Do NOT point PYTHONPATH at the broken .venv —
+    # only put the backend package root on the path so `app.main:app` imports.
+    $env:PYTHONPATH = Join-Path $Root "backend"
+    Remove-Item Env:VIRTUAL_ENV -ErrorAction SilentlyContinue
 
     Start-Process `
-        -FilePath $Python312 `
+        -FilePath $SystemPython `
         -ArgumentList @("-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000") `
         -WorkingDirectory (Join-Path $Root "backend") `
         -WindowStyle Hidden `

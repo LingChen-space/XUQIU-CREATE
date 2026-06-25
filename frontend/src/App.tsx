@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { LayoutDashboard, ClipboardList, Gamepad2, Trophy, Search, MessageSquareWarning, Radio } from "lucide-react"
+import { LayoutDashboard, ClipboardList, Gamepad2, Trophy, Search, MessageSquareWarning, Radio, Bot } from "lucide-react"
 import DailyOverview from "./pages/DailyOverview"
 import HistoryLeaderboard from "./pages/HistoryLeaderboard"
 import DemandManagement from "./pages/DemandManagement"
@@ -7,6 +7,8 @@ import GameManagement from "./pages/GameManagement"
 import SearchConfigPage from "./pages/SearchConfigPage"
 import MonitoringData from "./pages/MonitoringData"
 import DemandDetailPanel from "./components/DemandDetailPanel"
+import AssistantPanel from "./components/AssistantPanel"
+import { useAssistantChat } from "./hooks/useAssistantChat"
 import type { DemandCard } from "./types"
 
 const NAV_ITEMS = [
@@ -24,6 +26,8 @@ function App() {
   const [activeGameCount, setActiveGameCount] = useState(0)
   const [managedDemandCount, setManagedDemandCount] = useState(0)
   const [historyCount, setHistoryCount] = useState(0)
+  const [assistantOpen, setAssistantOpen] = useState(false)
+  const chat = useAssistantChat()
 
   const pageTitle =
     view === "overview" ? "今日需求总览"
@@ -86,6 +90,7 @@ function App() {
               onSelect={(d) => setSelectedDemand(d)}
               onGameCountChange={setActiveGameCount}
               onDemandCountChange={(n) => {}}
+              onOpenAssistant={() => setAssistantOpen(true)}
             />
           )}
           {view === "history" && (
@@ -112,6 +117,22 @@ function App() {
           demand={selectedDemand}
           onClose={() => setSelectedDemand(null)}
         />
+      )}
+
+      {!assistantOpen && (
+        <button
+          className="assistant-fab"
+          onClick={() => setAssistantOpen(true)}
+          title="好游快爆工具君"
+          aria-label="打开工具君"
+        >
+          <Bot size={22} />
+          <span>工具君AI总结分析</span>
+        </button>
+      )}
+
+      {assistantOpen && (
+        <AssistantPanel chat={chat} onClose={() => setAssistantOpen(false)} />
       )}
     </div>
   )

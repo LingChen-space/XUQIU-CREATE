@@ -24,6 +24,7 @@ from app.api.monitor import router as monitor_router
 from app.api.external_monitors import router as external_monitors_router
 
 from app.api.contents import router as contents_router
+from app.api.chat import router as chat_router
 
 logging.basicConfig(
     level=logging.INFO if not settings.debug else logging.DEBUG,
@@ -93,6 +94,8 @@ app.include_router(monitor_router)
 app.include_router(external_monitors_router)
 
 app.include_router(contents_router)
+
+app.include_router(chat_router)
 
 
 @app.get("/api/health")

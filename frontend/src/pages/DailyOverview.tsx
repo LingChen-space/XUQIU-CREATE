@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from "react"
-import { RefreshCw, Loader2, BarChart3, Gamepad2, TrendingUp, Zap, FileText, Plus, Brain, Target, Layers, RotateCw, ChevronDown, ChevronUp, CheckCircle, XCircle, Circle, LogIn, MoreHorizontal, Database } from "lucide-react"
+import { RefreshCw, Loader2, BarChart3, Gamepad2, TrendingUp, Zap, FileText, Plus, Brain, Target, Layers, RotateCw, ChevronDown, ChevronUp, CheckCircle, XCircle, Circle, LogIn, MoreHorizontal, Database, Bot } from "lucide-react"
 import { api } from "../api/client"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import type { DashboardSummary, DemandCard, Game, CrawlProgress, CrawlProgressRecord, TapKbSyncStatus } from "../types"
 import DemandCardView from "../components/DemandCard"
 import { DEMAND_CATEGORY_LABELS, groupDemandsByGame } from "../utils/demandGrouping"
@@ -69,9 +71,10 @@ interface Props {
   onSelect: (d: DemandCard) => void
   onGameCountChange: (n: number) => void
   onDemandCountChange: (n: number) => void
+  onOpenAssistant: () => void
 }
 
-export default function DailyOverview({ onSelect, onGameCountChange, onDemandCountChange }: Props) {
+export default function DailyOverview({ onSelect, onGameCountChange, onDemandCountChange, onOpenAssistant }: Props) {
   const [data, setData] = useState<DashboardSummary | null>(null)
   const [games, setGames] = useState<Game[]>([])
   const [loading, setLoading] = useState(true)
@@ -79,7 +82,8 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
   const [progress, setProgress] = useState<CrawlProgress | null>(null)
   const [externalStatus, setExternalStatus] = useState<TapKbSyncStatus | null>(null)
   const [progressLoading, setProgressLoading] = useState(false)
-  const [progressExpanded, setProgressExpanded] = useState(true)
+  const [progressExpanded, setProgressExpanded] = useState(false)
+  const [syncExpanded, setSyncExpanded] = useState(false)
   const [crawlNotice, setCrawlNotice] = useState<string | null>(null)
   const [douyinLoginLoading, setDouyinLoginLoading] = useState(false)
   const [openRetryMenuId, setOpenRetryMenuId] = useState<string | null>(null)
@@ -264,6 +268,10 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
   const hotDemands = data?.top_demands?.filter((d) => d.potential_score >= 70).length ?? 0
   const analysis = data?.daily_analysis
   const todayAnalysisCompleted = data?.today_analysis_completed === true
+  // 优先展示每日 LLM 总结分析（今日日报已生成时），否则回退规则摘要
+  const summaryText = (todayAnalysisCompleted && data?.latest_report_summary)
+    ? data.latest_report_summary
+    : (analysis?.summary_text ?? "")
   const visibleDemands = (data?.top_demands ?? [])
     .filter((d) => activeGameNames.has(d.game_name))
     .sort((a, b) => b.potential_score - a.potential_score)
@@ -398,28 +406,159 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
         </div>
       </div>
 
+      {/* Daily insight summary — 首页重点，含工具君入口 */}
+      {analysis && analysis.total_demands > 0 && (
+        <div style={{
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--radius-lg)",
+          padding: "20px 24px",
+          marginBottom: 24,
+          boxShadow: "var(--shadow-sm)",
+        }}>
+          {/* Header */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+            <Brain size={18} color="var(--primary)" />
+            <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>每日需求洞察总结</h3>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={onOpenAssistant}
+              title="打开工具君，对今日需求进行 AI 对话分析"
+              style={{ marginLeft: "auto" }}
+            >
+              <Bot size={14} />
+              工具君深入分析
+            </button>
+          </div>
+
+          {/* Summary text — 优先展示每日 LLM 总结分析，无则回退规则摘要 */}
+          <div style={{
+            fontSize: 14, lineHeight: 1.7, color: "var(--text-secondary)",
+            margin: "0 0 18px 0", padding: "12px 16px",
+            background: "var(--primary-light)",
+            borderRadius: 8,
+            borderLeft: "3px solid var(--primary)",
+          }}>
+            <div className="chat-markdown">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{summaryText}</ReactMarkdown>
+            </div>
+          </div>
+
+          {/* Stats row */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 16 }}>
+            {/* Level breakdown */}
+            <div style={{
+              flex: "1 1 200px", minWidth: 180,
+              background: "#f9fafb", borderRadius: 8, padding: "14px 16px",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+                <Layers size={14} color="var(--text-secondary)" />
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>需求等级分布</span>
+              </div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                {(["S级", "A级", "B级", "C级"] as const).map((level) => {
+                  const key = (level === "S级" ? "s_count" : level === "A级" ? "a_count" : level === "B级" ? "b_count" : "c_count") as keyof typeof analysis.level_breakdown
+                  const count = analysis.level_breakdown[key] ?? 0
+                  if (count === 0) return null
+                  const s = LEVEL_STYLE[level]
+                  return (
+                    <span key={level} style={{
+                      display: "inline-flex", alignItems: "center", gap: 4,
+                      padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600,
+                      background: s.bg, color: s.color,
+                    }}>
+                      {level} × {count}
+                    </span>
+                  )
+                })}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>
+                平均潜力分 <strong style={{ color: "var(--text)" }}>{analysis.avg_potential_score}</strong>
+              </div>
+            </div>
+
+            {/* Hot tool types */}
+            <div style={{
+              flex: "1 1 200px", minWidth: 180,
+              background: "#f9fafb", borderRadius: 8, padding: "14px 16px",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+                <Target size={14} color="var(--text-secondary)" />
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>热门工具方向</span>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {analysis.hot_tool_types?.map((t) => (
+                  <span key={t.type} style={{
+                    display: "inline-flex", alignItems: "center", gap: 4,
+                    padding: "4px 10px", borderRadius: 6, fontSize: 12,
+                    background: "var(--primary-light)", color: "var(--primary)",
+                    fontWeight: 500,
+                  }}>
+                    {t.type}
+                    <span style={{ opacity: 0.7, fontSize: 11 }}>({t.count}条)</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Top recommendations */}
+          {analysis.top_recommendations?.length > 0 && (
+            <div style={{
+              background: "#fefce8", borderRadius: 8, padding: "14px 16px",
+              border: "1px solid #fde68a",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                <Zap size={14} color="#b45309" />
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#92400e" }}>首推需求</span>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {analysis.top_recommendations.map((title, i) => (
+                  <span key={i} style={{
+                    fontSize: 13, color: "#78350f",
+                    padding: "3px 10px", background: "#fef3c7", borderRadius: 5,
+                    fontWeight: 500,
+                  }}>
+                    #{i + 1} {title.length > 25 ? title.slice(0, 25) + "..." : title}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tap+快爆论坛同步 — 可折叠，默认收起 */}
       {externalStatus && (
         <div style={{
           background: "var(--surface)",
           border: "1px solid var(--border)",
           borderRadius: "var(--radius-lg)",
-          padding: "12px 16px",
+          padding: "10px 16px",
           marginBottom: 16,
           boxShadow: "var(--shadow-sm)",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          flexWrap: "wrap",
         }}>
-          <Database size={15} color={externalStatus.status === "failed" ? "var(--red)" : "var(--primary)"} />
-          <span style={{ fontSize: 13, fontWeight: 600 }}>Tap+快爆论坛同步</span>
-          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{externalStatus.message}</span>
-          <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: "auto" }}>
-            入库 {externalStatus.contents.inserted || 0} 条
-            {typeof externalStatus.contents.duplicates === "number" && ` · 重复 ${externalStatus.contents.duplicates} 条`}
-            {typeof externalStatus.contents.unmatched_games === "number" && externalStatus.contents.unmatched_games > 0 && ` · 未匹配游戏 ${externalStatus.contents.unmatched_games} 条`}
-            {typeof externalStatus.configs.upserted === "number" && ` · 配置 ${externalStatus.configs.upserted} 条`}
-          </span>
+          <div
+            onClick={() => setSyncExpanded(!syncExpanded)}
+            style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
+          >
+            <Database size={15} color={externalStatus.status === "failed" ? "var(--red)" : "var(--primary)"} />
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Tap+快爆论坛同步</span>
+            <span style={{ fontSize: 12, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{externalStatus.message}</span>
+            <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+              入库 {externalStatus.contents.inserted || 0} 条
+              {syncExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+            </span>
+          </div>
+          {syncExpanded && (
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)", display: "flex", flexWrap: "wrap", gap: 12, fontSize: 12, color: "var(--text-muted)" }}>
+              <span>入库 {externalStatus.contents.inserted || 0} 条</span>
+              {typeof externalStatus.contents.duplicates === "number" && <span>重复 {externalStatus.contents.duplicates} 条</span>}
+              {typeof externalStatus.contents.unmatched_games === "number" && externalStatus.contents.unmatched_games > 0 && <span>未匹配游戏 {externalStatus.contents.unmatched_games} 条</span>}
+              {typeof externalStatus.configs.upserted === "number" && <span>配置 {externalStatus.configs.upserted} 条</span>}
+            </div>
+          )}
         </div>
       )}
 
@@ -791,116 +930,7 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
         </div>
       )}
 
-      {/* Daily summary analysis panel */}
-      {analysis && analysis.total_demands > 0 && (
-        <div style={{
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius-lg)",
-          padding: "20px 24px",
-          marginBottom: 24,
-          boxShadow: "var(--shadow-sm)",
-        }}>
-          {/* Header */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-            <Brain size={18} color="var(--primary)" />
-            <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>每日需求洞察总结</h3>
-          </div>
-
-          {/* Summary text */}
-          <p style={{
-            fontSize: 14, lineHeight: 1.7, color: "var(--text-secondary)",
-            margin: "0 0 18px 0", padding: "12px 16px",
-            background: "var(--primary-light)",
-            borderRadius: 8,
-            borderLeft: "3px solid var(--primary)",
-          }}>
-            {analysis.summary_text}
-          </p>
-
-          {/* Stats row */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 16 }}>
-            {/* Level breakdown */}
-            <div style={{
-              flex: "1 1 200px", minWidth: 180,
-              background: "#f9fafb", borderRadius: 8, padding: "14px 16px",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-                <Layers size={14} color="var(--text-secondary)" />
-                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>需求等级分布</span>
-              </div>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                {(["S级", "A级", "B级", "C级"] as const).map((level) => {
-                  const key = (level === "S级" ? "s_count" : level === "A级" ? "a_count" : level === "B级" ? "b_count" : "c_count") as keyof typeof analysis.level_breakdown
-                  const count = analysis.level_breakdown[key] ?? 0
-                  if (count === 0) return null
-                  const s = LEVEL_STYLE[level]
-                  return (
-                    <span key={level} style={{
-                      display: "inline-flex", alignItems: "center", gap: 4,
-                      padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600,
-                      background: s.bg, color: s.color,
-                    }}>
-                      {level} × {count}
-                    </span>
-                  )
-                })}
-              </div>
-              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>
-                平均潜力分 <strong style={{ color: "var(--text)" }}>{analysis.avg_potential_score}</strong>
-              </div>
-            </div>
-
-            {/* Hot tool types */}
-            <div style={{
-              flex: "1 1 200px", minWidth: 180,
-              background: "#f9fafb", borderRadius: 8, padding: "14px 16px",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-                <Target size={14} color="var(--text-secondary)" />
-                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>热门工具方向</span>
-              </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {analysis.hot_tool_types?.map((t) => (
-                  <span key={t.type} style={{
-                    display: "inline-flex", alignItems: "center", gap: 4,
-                    padding: "4px 10px", borderRadius: 6, fontSize: 12,
-                    background: "var(--primary-light)", color: "var(--primary)",
-                    fontWeight: 500,
-                  }}>
-                    {t.type}
-                    <span style={{ opacity: 0.7, fontSize: 11 }}>({t.count}条)</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Top recommendations */}
-          {analysis.top_recommendations?.length > 0 && (
-            <div style={{
-              background: "#fefce8", borderRadius: 8, padding: "14px 16px",
-              border: "1px solid #fde68a",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                <Zap size={14} color="#b45309" />
-                <span style={{ fontSize: 12, fontWeight: 600, color: "#92400e" }}>首推需求</span>
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {analysis.top_recommendations.map((title, i) => (
-                  <span key={i} style={{
-                    fontSize: 13, color: "#78350f",
-                    padding: "3px 10px", background: "#fef3c7", borderRadius: 5,
-                    fontWeight: 500,
-                  }}>
-                    #{i + 1} {title.length > 25 ? title.slice(0, 25) + "..." : title}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      {/* 每日需求洞察总结已上移至指标卡下方 */}
 
       {/* Empty state: no active games */}
       {activeGames.length === 0 ? (
