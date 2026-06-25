@@ -130,21 +130,27 @@ _LEVEL_RANK = {
 
 
 @router.get("/clues/grouped")
-async def list_radar_clues_grouped(db: AsyncSession = Depends(get_db)):
+async def list_radar_clues_grouped(
+    days: int | None = None,
+    min_score: float = 0,
+    per_game: int | None = None,
+    db: AsyncSession = Depends(get_db),
+):
     """按游戏聚合的需求词视图：跨 clue_type、按 normalize(term) 去重合并。
 
-    范围 status in (pending, confirmed)。每个游戏返回去重后的需求词列表，
-    每词带等级/分数/合并条数，供"需求雷达"tab 页简洁展示与升级操作。
+    范围 status in (pending, confirmed)。支持 days(最近N天,按 last_seen_at)、
+    min_score(总分下限)、per_game(每游戏最多返回前N个) 过滤，供 tab 页精简展示。
     """
-    clues = (
-        await db.execute(
-            select(RadarClue).where(
-                RadarClue.status.in_(
-                    [RadarClueStatus.pending, RadarClueStatus.confirmed]
-                )
-            )
+    stmt = select(RadarClue).where(
+        RadarClue.status.in_(
+            [RadarClueStatus.pending, RadarClueStatus.confirmed]
         )
-    ).scalars().all()
+    )
+    if days and days > 0:
+        stmt = stmt.where(RadarClue.last_seen_at >= datetime.now() - timedelta(days=days))
+    if min_score and min_score > 0:
+        stmt = stmt.where(RadarClue.total_score >= min_score)
+    clues = (await db.execute(stmt)).scalars().all()
     if not clues:
         return []
 
@@ -158,11 +164,14 @@ async def list_radar_clues_grouped(db: AsyncSession = Depends(get_db)):
     # game_id -> {"game": Game, "terms": {normalized_term: 代表词}}
     groups: dict[str, dict] = {}
     for clue in clues:
+        game = game_map.get(clue.game_id)
+        if game is None:
+            continue  # 跳过游戏已被删除的残留线索，避免出现"未知游戏"分组
         norm = normalize_concept(clue.term)
         if not norm:
             continue
         group = groups.setdefault(
-            clue.game_id, {"game": game_map.get(clue.game_id), "terms": {}}
+            clue.game_id, {"game": game, "terms": {}}
         )
         cur = group["terms"].get(norm)
         if cur is None:
@@ -202,6 +211,8 @@ async def list_radar_clues_grouped(db: AsyncSession = Depends(get_db)):
                 _LEVEL_RANK.get(RadarClueLevel(t["level"]), 9),
             )
         )
+        if per_game and per_game > 0:
+            terms = terms[:per_game]
         result.append({
             "game_id": game_id,
             "game_name": game.name if game else "未知游戏",

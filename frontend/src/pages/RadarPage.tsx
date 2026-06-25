@@ -18,10 +18,19 @@ export default function RadarPage() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [toast, setToast] = useState("")
 
+  // 过滤：days="" 全部 / minScore="0" 不限 / perGame="" 全部
+  const [days, setDays] = useState("")
+  const [minScore, setMinScore] = useState("0")
+  const [perGame, setPerGame] = useState("10")
+
   const refresh = async (showLoading = false) => {
     if (showLoading) setLoading(true)
     try {
-      setGroups(await api.getRadarCluesGrouped())
+      const params: { days?: number; min_score?: number; per_game?: number } = {}
+      if (days) params.days = Number(days)
+      if (Number(minScore) > 0) params.min_score = Number(minScore)
+      if (perGame) params.per_game = Number(perGame)
+      setGroups(await api.getRadarCluesGrouped(params))
       setError("")
     } catch {
       setError("需求雷达读取失败，请检查后端扫描状态")
@@ -34,7 +43,7 @@ export default function RadarPage() {
     refresh(true)
     const timer = setInterval(() => refresh(false), 60_000)
     return () => clearInterval(timer)
-  }, [])
+  }, [days, minScore, perGame])
 
   const promote = async (term: RadarGroupedTerm) => {
     setBusyId(term.id)
@@ -73,15 +82,43 @@ export default function RadarPage() {
   return (
     <div className="radar-page">
       {toast && <div className="radar-page-toast">{toast}</div>}
+
+      <div className="radar-page-filters">
+        <label>时间
+          <select value={days} onChange={(e) => setDays(e.target.value)}>
+            <option value="">全部</option>
+            <option value="7">近7天</option>
+            <option value="30">近30天</option>
+            <option value="90">近90天</option>
+          </select>
+        </label>
+        <label>最低分
+          <select value={minScore} onChange={(e) => setMinScore(e.target.value)}>
+            <option value="0">不限</option>
+            <option value="30">≥30</option>
+            <option value="50">≥50</option>
+            <option value="70">≥70</option>
+          </select>
+        </label>
+        <label>每游戏
+          <select value={perGame} onChange={(e) => setPerGame(e.target.value)}>
+            <option value="10">前10</option>
+            <option value="20">前20</option>
+            <option value="50">前50</option>
+            <option value="">全部</option>
+          </select>
+        </label>
+      </div>
+
       <div className="radar-page-overview">
-        <span><Radar size={14} /> {groups.length} 个游戏 · {totalTerms} 个去重需求词</span>
+        <span><Radar size={14} /> {groups.length} 个游戏 · {totalTerms} 个需求词</span>
         <span className="radar-page-hint">同游戏下近义词已合并；点「升级」将需求词转为正式需求</span>
       </div>
 
       {groups.length === 0 ? (
         <div className="radar-page-empty">
           <Eye size={18} />
-          暂无待处理需求词，雷达仍在持续扫描
+          当前过滤条件下暂无需求词
         </div>
       ) : (
         <div className="radar-page-groups">

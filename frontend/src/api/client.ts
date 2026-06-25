@@ -90,7 +90,12 @@ export const api = {
     const qs = new URLSearchParams(params).toString()
     return request<RadarClue[]>(`/radar/clues${qs ? '?' + qs : ''}`)
   },
-  getRadarCluesGrouped: () => request<RadarGameGroup[]>('/radar/clues/grouped'),
+  getRadarCluesGrouped: (params: { days?: number; min_score?: number; per_game?: number } = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)]))
+    ).toString()
+    return request<RadarGameGroup[]>(`/radar/clues/grouped${qs ? '?' + qs : ''}`)
+  },
   confirmRadarClue: (id: string) =>
     request<RadarClue>(`/radar/clues/${id}/confirm`, { method: 'POST' }),
   dismissRadarClue: (id: string) =>

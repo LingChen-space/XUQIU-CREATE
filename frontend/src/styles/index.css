@@ -1950,6 +1950,35 @@
   color: var(--text-secondary);
 }
 
+.radar-page-filters {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.radar-page-filters label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.radar-page-filters select {
+  padding: 4px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+  color: #1e293b;
+  cursor: pointer;
+}
+
 .radar-page-overview > span:first-child {
   display: inline-flex;
   align-items: center;
