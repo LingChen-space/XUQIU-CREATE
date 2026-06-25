@@ -180,18 +180,31 @@ def match_demand_keywords(game_name: str, text: str) -> list[DemandKeywordMatch]
     if not normalized_text:
         return []
 
-    candidates: list[tuple[int, str, DemandKeywordRule]] = []
+    candidates: list[tuple[int, int, int, str, DemandKeywordRule]] = []
     for rule in rules_for_game(game_name):
         for alias in rule.aliases:
             normalized_alias = normalize_keyword(alias)
-            if len(normalized_alias) >= 2 and normalized_alias in normalized_text:
-                candidates.append((len(normalized_alias), alias, rule))
+            if len(normalized_alias) < 2:
+                continue
+            start = normalized_text.find(normalized_alias)
+            if start >= 0:
+                candidates.append((
+                    len(normalized_alias),
+                    start,
+                    start + len(normalized_alias),
+                    alias,
+                    rule,
+                ))
 
     matches: list[DemandKeywordMatch] = []
     seen_terms: set[str] = set()
-    for _, alias, rule in sorted(candidates, key=lambda item: -item[0]):
+    occupied: list[tuple[int, int]] = []
+    for _, start, end, alias, rule in sorted(candidates, key=lambda item: -item[0]):
         if rule.canonical_term in seen_terms:
             continue
+        if any(start < used_end and end > used_start for used_start, used_end in occupied):
+            continue
         seen_terms.add(rule.canonical_term)
+        occupied.append((start, end))
         matches.append(DemandKeywordMatch(rule=rule, matched_alias=alias))
     return matches

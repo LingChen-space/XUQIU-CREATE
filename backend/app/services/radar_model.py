@@ -16,13 +16,12 @@ from app.services.radar import RadarService
 
 RETRY_DELAYS_MINUTES = (1, 5, 15)
 
-RADAR_REVIEW_PROMPT = """你是好游快爆早期需求雷达分析师。
-请审阅以下同一游戏的新内容，找出所有新的用户需求、工具机会、游戏新词/新机制、
-体验服更新/爆料/资格变化、用户自制或外部解决方案。
+RADAR_REVIEW_PROMPT = """你是好游快爆需求雷达总结助手。
+每条内容已经由确定性词库命中一个或多个“标准需求词”。
+你只能总结这些标准需求词对应的具体玩家问题，不能新增、改名或扩展需求方向。
 
-不要因为只出现一次而丢弃；不要要求内容必须出现“工具”字样。
 只输出 JSON：
-{{"findings":[{{"content_id":"...","type":"new_term|new_demand|experience_update|experience_leak|qualification_change|external_solution","concept":"2-30字","summary":"判断依据","demand_intent":0-100,"timeliness":0-100,"external_validation":0-100,"suggested_tool_type":"可为空"}}]}}
+{{"findings":[{{"content_id":"...","concept":"必须原样使用给出的标准需求词","summary":"玩家具体问题摘要","suggested_tool_type":"可为空"}}]}}
 
 内容：
 {contents}
@@ -57,12 +56,25 @@ class RadarModelReviewer:
         if not rows:
             return 0
 
-        states = [row[0] for row in rows]
-        contents = [row[1] for row in rows]
+        review_rows = []
+        for state, content in rows:
+            terms = await self.radar.standard_terms_for_content(content.id)
+            if not terms:
+                state.model_status = "completed"
+                state.model_scanned_at = current_time
+                continue
+            review_rows.append((state, content, terms))
+        if not review_rows:
+            await self.session.commit()
+            return 0
+
+        states = [row[0] for row in review_rows]
+        contents = [row[1] for row in review_rows]
         prompt_contents = "\n\n".join(
             f"内容ID：{content.id}\n标题：{content.title}\n正文：{content.body[:1000]}\n"
+            f"标准需求词：{'、'.join(terms)}\n"
             f"互动：浏览{content.view_count} 点赞{content.like_count} 评论{content.comment_count} 分享{content.share_count}"
-            for content in contents
+            for _, content, terms in review_rows
         )
 
         try:
@@ -82,7 +94,7 @@ class RadarModelReviewer:
                 content_id = str(finding.get("content_id") or "")
                 findings_by_content.setdefault(content_id, []).append(finding)
 
-            for state, content in rows:
+            for state, content, _ in review_rows:
                 await self.radar.apply_model_findings(
                     content.id,
                     findings_by_content.get(content.id, []),

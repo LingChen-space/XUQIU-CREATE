@@ -83,6 +83,14 @@ class DemandKeywordRulesTest(unittest.TestCase):
         self.assertEqual(canonical_game_name("三角洲行动体验服"), "三角洲行动")
         self.assertIsNone(canonical_game_name("不存在的游戏"))
 
+    def test_longer_overlapping_standard_term_wins(self):
+        matches = match_demand_keywords("三角洲行动", "卡战备技巧讨论")
+
+        self.assertEqual(
+            [item.canonical_term for item in matches],
+            ["卡战备技巧"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

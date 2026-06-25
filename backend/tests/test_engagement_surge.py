@@ -14,6 +14,7 @@ from app.models.game import Game, GameGenre, GameStatus
 from app.models.platform_content import ContentPlatform, ContentType, PlatformContent
 from app.models.radar import ContentMetricSnapshot, RadarClue, RadarClueLevel, RadarClueType
 from app.services.engagement_surge import EngagementSurgeDetector, classify_surge
+from app.services.radar import RadarService
 
 
 db_path = Path(tempfile.gettempdir()) / "req_gen_engagement_surge_test.db"
@@ -75,7 +76,7 @@ class EngagementSurgeTest(unittest.TestCase):
                     platform=ContentPlatform.taptap,
                     content_type=ContentType.post,
                     source_id="surge-source",
-                    title="新玩法讨论突然升温",
+                    title="卡战备技巧讨论突然升温",
                     published_at=datetime.now() - timedelta(hours=1),
                 )
                 session.add(content)
@@ -102,6 +103,7 @@ class EngagementSurgeTest(unittest.TestCase):
                     ),
                 ])
                 await session.commit()
+                await RadarService(session).scan_content_rules(content.id)
 
                 detector = EngagementSurgeDetector(session)
 
@@ -115,9 +117,10 @@ class EngagementSurgeTest(unittest.TestCase):
 
         clue, stored = asyncio.run(scenario())
         self.assertIsNotNone(clue)
-        self.assertEqual(stored.clue_type, RadarClueType.engagement_surge)
+        self.assertEqual(stored.clue_type, RadarClueType.new_demand)
+        self.assertEqual(stored.term, "卡战备技巧")
         self.assertEqual(stored.level, RadarClueLevel.urgent)
-        self.assertIn("评论", stored.trigger_reason)
+        self.assertIn("delta_5m", stored.engagement_detail)
 
 
 if __name__ == "__main__":

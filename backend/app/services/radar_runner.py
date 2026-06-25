@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.game import Game
 from app.models.platform_content import PlatformContent
 from app.models.radar import (
     ContentConcept,
@@ -13,6 +14,7 @@ from app.models.radar import (
     ContentScanState,
 )
 from app.services.engagement_surge import EngagementSurgeDetector
+from app.services.demand_keyword_rules import match_demand_keywords
 from app.services.radar import RadarService, normalize_concept
 from app.services.radar_model import RadarModelReviewer
 
@@ -89,6 +91,7 @@ async def backfill_radar_history(session: AsyncSession) -> int:
         )
     ).scalars().all()
     radar = RadarService(session)
+    games: dict[str, Game | None] = {}
     for content in contents:
         session.add(ContentScanState(
             content_id=content.id,
@@ -105,13 +108,34 @@ async def backfill_radar_history(session: AsyncSession) -> int:
             comment_count=content.comment_count,
             share_count=content.share_count,
         ))
-        for concept in radar._extract_concepts(content):
+        if content.game_id not in games:
+            games[content.game_id] = await session.get(Game, content.game_id)
+        game = games[content.game_id]
+        if game is None:
+            continue
+        matches = match_demand_keywords(
+            game.name,
+            radar._content_text(content),
+        )
+        for match in matches:
+            if (
+                match.priority == "level_3"
+                and content.published_at >= datetime.now() - timedelta(days=7)
+            ):
+                await radar._apply_keyword_match(
+                    content,
+                    game,
+                    match,
+                    radar._content_text(content),
+                )
+                continue
+            concept = match.canonical_term
             normalized = normalize_concept(concept)
             existing = (
                 await session.execute(
                     select(ContentConcept).where(
                         ContentConcept.game_id == content.game_id,
-                        ContentConcept.concept_type == "new_term",
+                        ContentConcept.concept_type == "standard_keyword",
                         ContentConcept.normalized_value == normalized,
                     )
                 )
@@ -120,7 +144,7 @@ async def backfill_radar_history(session: AsyncSession) -> int:
                 session.add(ContentConcept(
                     game_id=content.game_id,
                     content_id=content.id,
-                    concept_type="new_term",
+                    concept_type="standard_keyword",
                     value=concept,
                     normalized_value=normalized,
                     occurrence_count=1,
