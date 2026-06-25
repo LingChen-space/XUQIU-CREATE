@@ -5,5 +5,25 @@ from app.models.demand import Demand
 from app.models.daily_report import DailyReport
 from app.models.platform_search_config import PlatformSearchConfig
 from app.models.crawl_progress import CrawlProgress
+from app.models.radar import (
+    ContentConcept,
+    ContentMetricSnapshot,
+    ContentScanState,
+    RadarClue,
+    RadarCollectionState,
+)
 
-__all__ = ["Game", "PlatformContent", "DemandSignal", "Demand", "DailyReport", "PlatformSearchConfig", "CrawlProgress"]
+__all__ = [
+    "Game",
+    "PlatformContent",
+    "DemandSignal",
+    "Demand",
+    "DailyReport",
+    "PlatformSearchConfig",
+    "CrawlProgress",
+    "ContentScanState",
+    "ContentConcept",
+    "ContentMetricSnapshot",
+    "RadarClue",
+    "RadarCollectionState",
+]
