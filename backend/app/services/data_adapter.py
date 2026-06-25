@@ -984,6 +984,12 @@ class DataAdapter:
         failed = 0
         for game in games:
             for platform, config in config_by_platform.items():
+                # 跳过抖音探索：探索用游戏名+别名搜索会弹出真实浏览器窗口
+                # (headless=False)，与后台配置的搜索词采集无关，且每 5 分钟一轮扰民。
+                # 抖音只走配置词采集 (ingest_contents → crawl_progress)。如需恢复探索，
+                # 删除此跳过即可。详见 [[backend-runtime-env]] 相关采集路径。
+                if platform == "douyin":
+                    continue
                 state = (
                     await self.session.execute(
                         select(RadarCollectionState).where(
