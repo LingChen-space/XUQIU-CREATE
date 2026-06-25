@@ -18,6 +18,7 @@ from app.services.external_monitor_sync import TapKbForumSyncService
 from app.services.signal_engine import SignalEngine
 from app.services.llm_pipeline import LLMPipeline
 from app.services.report_generator import ReportGenerator
+from app.services.radar_runner import run_radar_scan_cycle
 
 logger = logging.getLogger(__name__)
 
@@ -25,17 +26,51 @@ scheduler = AsyncIOScheduler()
 
 
 async def run_tap_kb_realtime_sync():
-    """增量同步 Tap+快爆后台，不触发完整需求分析。"""
+    """增量同步 Tap+快爆后台，并立即触发早期雷达扫描。"""
     async with async_session() as session:
         try:
             result = await TapKbForumSyncService(session).sync(days=30, force=False, reason="auto")
             inserted = result.get("contents", {}).get("inserted", 0)
             if inserted:
                 logger.info(f"[TapKbRealtimeSync] 同步到 {inserted} 条新内容")
+                await run_radar_scan_cycle(session)
             return result
         except Exception as exc:
             logger.exception(f"[TapKbRealtimeSync] 执行失败: {exc}")
             return {"ok": False, "status": "failed", "message": str(exc)}
+
+
+async def run_radar_realtime_scan():
+    async with async_session() as session:
+        try:
+            return await run_radar_scan_cycle(session)
+        except Exception as exc:
+            logger.exception(f"[RadarScan] 执行失败: {exc}")
+            return {"ok": False, "message": str(exc)}
+
+
+async def run_priority_game_exploration():
+    async with async_session() as session:
+        try:
+            adapter = DataAdapter(session)
+            result = await adapter.ingest_exploration("priority")
+            await run_radar_scan_cycle(session)
+            return result
+        except Exception as exc:
+            logger.exception(f"[RadarPriorityExploration] 执行失败: {exc}")
+            return {"ok": False, "message": str(exc)}
+
+
+async def run_regular_game_exploration():
+    async with async_session() as session:
+        try:
+            adapter = DataAdapter(session)
+            result = await adapter.ingest_exploration("regular")
+            await run_radar_scan_cycle(session)
+            return result
+        except Exception as exc:
+            logger.exception(f"[RadarRegularExploration] 执行失败: {exc}")
+            return {"ok": False, "message": str(exc)}
 
 
 async def run_daily_pipeline(force_recrawl: bool = False):
@@ -159,8 +194,38 @@ def start_scheduler():
         max_instances=1,
         coalesce=True,
     )
+    scheduler.add_job(
+        run_radar_realtime_scan,
+        trigger=IntervalTrigger(minutes=1),
+        id="radar_realtime_scan",
+        name="早期需求雷达实时扫描",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        run_priority_game_exploration,
+        trigger=IntervalTrigger(minutes=5),
+        id="radar_priority_exploration",
+        name="重点游戏宽口径探索",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        run_regular_game_exploration,
+        trigger=IntervalTrigger(minutes=30),
+        id="radar_regular_exploration",
+        name="普通游戏宽口径探索",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
     scheduler.start()
-    logger.info(f"调度器已启动 - 每日 {settings.schedule_hour:02d}:{settings.schedule_minute:02d} 执行，Tap+快爆每 1 分钟增量同步")
+    logger.info(
+        f"调度器已启动 - 每日 {settings.schedule_hour:02d}:{settings.schedule_minute:02d} 完整分析，"
+        "Tap+快爆及雷达每1分钟，重点游戏探索每5分钟，普通游戏探索每30分钟"
+    )
 
 
 def stop_scheduler():

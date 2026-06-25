@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from app.config import settings
 from app.database import init_db
 from app.services.scheduler import start_scheduler, stop_scheduler
+from app.services.radar_runner import backfill_radar_history
 
 # 注册路由
 from app.api.games import router as games_router
@@ -25,6 +26,7 @@ from app.api.external_monitors import router as external_monitors_router
 
 from app.api.contents import router as contents_router
 from app.api.chat import router as chat_router
+from app.api.radar import router as radar_router
 
 logging.basicConfig(
     level=logging.INFO if not settings.debug else logging.DEBUG,
@@ -56,6 +58,11 @@ async def lifespan(app: FastAPI):
     logger.info("初始化数据库...")
     await init_db()
     await seed_initial_data()
+    from app.database import async_session
+    async with async_session() as session:
+        backfilled = await backfill_radar_history(session)
+        if backfilled:
+            logger.info(f"早期需求雷达历史基线回填: {backfilled} 条内容")
 
     # 启动每日调度器
     start_scheduler()
@@ -96,6 +103,7 @@ app.include_router(external_monitors_router)
 app.include_router(contents_router)
 
 app.include_router(chat_router)
+app.include_router(radar_router)
 
 
 @app.get("/api/health")
