@@ -19,6 +19,7 @@ from app.models.game import Game, GameStatus, GameGenre
 from app.models.platform_content import PlatformContent, ContentPlatform, ContentType
 from app.models.platform_search_config import PlatformSearchConfig
 from app.models.crawl_progress import CrawlProgress
+from app.models.radar import ContentMetricSnapshot, ContentScanState, RadarCollectionState
 from app.utils.engagement import compute_content_hot_score
 
 logger = logging.getLogger(__name__)
@@ -709,23 +710,28 @@ class DataAdapter:
 
         await self.session.commit()
 
-    async def _dedup_and_insert(self, mapped_items: list[dict]) -> tuple[int, dict]:
-        """对已映射的内容进行数据库级去重并入库，返回实际入库数和跳过原因统计。"""
+    async def _dedup_and_insert(
+        self,
+        mapped_items: list[dict],
+        allow_unrelated: bool = False,
+    ) -> tuple[int, dict]:
+        """内容入库；重复内容更新互动数据并记录快照。"""
         stats = {
             "input_count": len(mapped_items),
             "filtered_unrelated": 0,
             "duplicate_source": 0,
             "duplicate_url": 0,
             "duplicate_title": 0,
+            "updated_existing": 0,
             "inserted": 0,
         }
         if not mapped_items:
             return 0, stats
 
-        # 过滤工具相关
-        filtered = [c for c in mapped_items if _is_tool_related(
-            c.get("title", ""), c.get("body", "")
-        )]
+        filtered = mapped_items if allow_unrelated else [
+            c for c in mapped_items
+            if _is_tool_related(c.get("title", ""), c.get("body", ""))
+        ]
         stats["filtered_unrelated"] = len(mapped_items) - len(filtered)
         if not filtered:
             return 0, stats
@@ -738,53 +744,92 @@ class DataAdapter:
             )
 
         urls = set(c.get("url", "") for c in filtered if c.get("url"))
-        existing_urls: set[str] = set()
+        existing_by_url: dict[tuple[str, str], PlatformContent] = {}
         if urls:
-            stmt = select(PlatformContent.url).where(PlatformContent.url.in_(urls))
+            stmt = select(PlatformContent).where(PlatformContent.url.in_(urls))
             result = await self.session.execute(stmt)
-            existing_urls = set(result.scalars().all())
-
-        source_ids = set(c.get("source_id", "") for c in filtered if c.get("source_id"))
-        existing_source_keys: set[tuple[ContentPlatform, str]] = set()
-        if source_ids:
-            stmt = select(
-                PlatformContent.platform,
-                PlatformContent.source_id,
-            ).where(PlatformContent.source_id.in_(source_ids))
-            result = await self.session.execute(stmt)
-            existing_source_keys = {
-                (_resolve_content_platform(platform), source_id)
-                for platform, source_id in result.all()
-                if source_id
+            existing_by_url = {
+                (content.game_id, content.url): content
+                for content in result.scalars().all()
+                if content.url
             }
 
-        seen_urls: set[str] = set(existing_urls)
-        seen_source_keys: set[tuple[ContentPlatform, str]] = set(existing_source_keys)
-        seen_titles: set[str] = set()
+        source_ids = set(c.get("source_id", "") for c in filtered if c.get("source_id"))
+        existing_by_source: dict[tuple[str, ContentPlatform, str], PlatformContent] = {}
+        if source_ids:
+            stmt = select(PlatformContent).where(PlatformContent.source_id.in_(source_ids))
+            result = await self.session.execute(stmt)
+            existing_by_source = {
+                (content.game_id, _resolve_content_platform(content.platform), content.source_id): content
+                for content in result.scalars().all()
+                if content.source_id
+            }
+
+        seen_urls: set[tuple[str, str]] = set(existing_by_url)
+        seen_source_keys: set[tuple[str, ContentPlatform, str]] = set(existing_by_source)
+        seen_titles: set[tuple[str, str]] = set()
         count = 0
 
         for c in filtered:
+            game_id = c["game_id"]
             url = c.get("url", "")
             title = c.get("title", "")
             source_id = c.get("source_id", "")
             platform_enum = _resolve_content_platform(c.get("platform", "other"))
-            source_key = (platform_enum, source_id)
+            source_key = (game_id, platform_enum, source_id)
+            url_key = (game_id, url)
+            existing_content = (
+                existing_by_source.get(source_key)
+                if source_id
+                else existing_by_url.get(url_key)
+            )
+            if existing_content is not None:
+                existing_content.title = title or existing_content.title
+                existing_content.body = c.get("body", "") or existing_content.body
+                existing_content.author = c.get("author", "") or existing_content.author
+                existing_content.view_count = max(existing_content.view_count, c.get("view_count", 0))
+                existing_content.like_count = max(existing_content.like_count, c.get("like_count", 0))
+                existing_content.comment_count = max(existing_content.comment_count, c.get("comment_count", 0))
+                existing_content.share_count = max(existing_content.share_count, c.get("share_count", 0))
+                existing_content.hot_score = compute_content_hot_score(
+                    existing_content.view_count,
+                    existing_content.like_count,
+                    existing_content.comment_count,
+                    existing_content.share_count,
+                )
+                existing_content.extra_data = c.get("extra_data", "{}") or existing_content.extra_data
+                self.session.add(ContentMetricSnapshot(
+                    content_id=existing_content.id,
+                    platform=platform_enum,
+                    view_count=existing_content.view_count,
+                    like_count=existing_content.like_count,
+                    comment_count=existing_content.comment_count,
+                    share_count=existing_content.share_count,
+                ))
+                stats["updated_existing"] += 1
+                if source_id:
+                    stats["duplicate_source"] += 1
+                elif url:
+                    stats["duplicate_url"] += 1
+                continue
+
             if source_id and source_key in seen_source_keys:
                 stats["duplicate_source"] += 1
                 continue
-            if url and url in seen_urls:
+            if url and url_key in seen_urls:
                 stats["duplicate_url"] += 1
                 continue
             norm_title = _normalize_title(title)
-            if norm_title and norm_title in seen_titles:
+            title_key = (game_id, norm_title)
+            if norm_title and title_key in seen_titles:
                 stats["duplicate_title"] += 1
                 continue
             if source_id:
                 seen_source_keys.add(source_key)
             if url:
-                seen_urls.add(url)
+                seen_urls.add(url_key)
             if norm_title:
-                seen_titles.add(norm_title)
+                seen_titles.add(title_key)
 
             content = PlatformContent(
                 id=str(uuid.uuid4()),
@@ -805,6 +850,16 @@ class DataAdapter:
                 extra_data=c.get("extra_data", "{}"),
             )
             self.session.add(content)
+            await self.session.flush()
+            self.session.add(ContentMetricSnapshot(
+                content_id=content.id,
+                platform=platform_enum,
+                view_count=content.view_count,
+                like_count=content.like_count,
+                comment_count=content.comment_count,
+                share_count=content.share_count,
+            ))
+            self.session.add(ContentScanState(content_id=content.id))
             count += 1
 
         await self.session.commit()
@@ -844,9 +899,13 @@ class DataAdapter:
                     "completed", items_fetched=0, items_ingested=0, result_detail=detail)
                 return 0
 
-            # 2. 映射到各游戏
+            # 2. 映射到目标游戏；游戏级配置不得扩散到其他游戏。
+            target_games = games
+            if getattr(config, "game_id", None):
+                scoped_game = games.get(config.game_id)
+                target_games = {config.game_id: scoped_game} if scoped_game else {}
             mapped: list[dict] = []
-            for game_id, game in games.items():
+            for game_id, game in target_games.items():
                 for item in items:
                     m = self._map_monitor_item(game_id, game.name, platform_key, item, keyword)
                     m["game_id"] = game_id
@@ -883,6 +942,87 @@ class DataAdapter:
             await self._update_progress(platform_key, keyword, crawl_count,
                 "failed", error_msg=error_msg, result_detail=detail)
             return 0
+
+    async def ingest_exploration(self, priority_group: str) -> dict:
+        """按游戏名做宽口径探索采集，不经过工具关键词白名单。"""
+        stmt = select(Game).where(Game.status != GameStatus.inactive)
+        if priority_group == "priority":
+            stmt = stmt.where(Game.priority_weight >= 3)
+        else:
+            stmt = stmt.where(Game.priority_weight < 3)
+        games = (await self.session.execute(stmt.order_by(Game.priority_weight.desc()))).scalars().all()
+
+        configs = (
+            await self.session.execute(
+                select(PlatformSearchConfig).where(
+                    PlatformSearchConfig.enabled == True,  # noqa: E712
+                    PlatformSearchConfig.platform.in_(list(MONITOR_PLATFORM_ENDPOINTS)),
+                )
+            )
+        ).scalars().all()
+        config_by_platform: dict[str, PlatformSearchConfig] = {}
+        for config in configs:
+            config_by_platform.setdefault(config.platform, config)
+
+        inserted_total = 0
+        updated_total = 0
+        completed = 0
+        failed = 0
+        for game in games:
+            for platform, config in config_by_platform.items():
+                state = (
+                    await self.session.execute(
+                        select(RadarCollectionState).where(
+                            RadarCollectionState.game_id == game.id,
+                            RadarCollectionState.platform == platform,
+                            RadarCollectionState.mode == "exploration",
+                        )
+                    )
+                ).scalar()
+                if state is None:
+                    state = RadarCollectionState(
+                        game_id=game.id,
+                        platform=platform,
+                        mode="exploration",
+                    )
+                    self.session.add(state)
+                state.status = "running"
+                state.last_started_at = datetime.now()
+                state.last_error = ""
+                await self.session.commit()
+                try:
+                    items = await self._call_monitor(
+                        platform,
+                        game.name,
+                        min(config.crawl_count or 50, 100),
+                        getattr(config, "proxy_url", None),
+                    )
+                    mapped = [
+                        {
+                            **self._map_monitor_item(game.id, game.name, platform, item, game.name),
+                            "game_id": game.id,
+                        }
+                        for item in items
+                    ]
+                    inserted, stats = await self._dedup_and_insert(mapped, allow_unrelated=True)
+                    inserted_total += inserted
+                    updated_total += int(stats.get("updated_existing", 0))
+                    state.status = "completed"
+                    state.last_completed_at = datetime.now()
+                    state.new_content_count = inserted
+                    completed += 1
+                except Exception as exc:
+                    state.status = "failed"
+                    state.last_error = str(exc)[:1000]
+                    failed += 1
+                await self.session.commit()
+        return {
+            "games": len(games),
+            "completed": completed,
+            "failed": failed,
+            "inserted": inserted_total,
+            "updated": updated_total,
+        }
 
     async def ingest_contents(
         self,

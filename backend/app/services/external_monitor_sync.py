@@ -20,6 +20,7 @@ from app.models.external_monitor_record import ExternalMonitorRecord
 from app.models.game import Game, GameGenre, GameStatus, default_priority_weight
 from app.models.platform_content import ContentPlatform, ContentType, PlatformContent
 from app.models.platform_search_config import PlatformSearchConfig
+from app.models.radar import ContentMetricSnapshot, ContentScanState
 from app.utils.engagement import compute_content_hot_score
 
 logger = logging.getLogger(__name__)
@@ -494,13 +495,32 @@ class TapKbForumSyncService:
             if existing_content is not None:
                 for key, value in content_values.items():
                     setattr(existing_content, key, value)
+                self.session.add(ContentMetricSnapshot(
+                    content_id=existing_content.id,
+                    platform=platform,
+                    view_count=view_count,
+                    like_count=like_count,
+                    comment_count=comment_count,
+                    share_count=share_count,
+                ))
                 continue
 
-            self.session.add(PlatformContent(
+            content = PlatformContent(
                 id=str(uuid.uuid4()),
                 source_id=source_id,
                 **content_values,
+            )
+            self.session.add(content)
+            await self.session.flush()
+            self.session.add(ContentMetricSnapshot(
+                content_id=content.id,
+                platform=platform,
+                view_count=view_count,
+                like_count=like_count,
+                comment_count=comment_count,
+                share_count=share_count,
             ))
+            self.session.add(ContentScanState(content_id=content.id))
             stats["inserted"] += 1
             if len(new_records) < 5:
                 new_records.append({
