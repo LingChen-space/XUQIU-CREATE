@@ -159,8 +159,8 @@ async def get_radar_summary(db: AsyncSession = Depends(get_db)):
     today_start = datetime.combine(date.today(), datetime.min.time())
     new_contents = (
         await db.execute(
-            select(func.count()).select_from(ContentScanState)
-            .where(ContentScanState.created_at >= today_start)
+            select(func.count()).select_from(PlatformContent)
+            .where(PlatformContent.collected_at >= today_start)
         )
     ).scalar_one()
     confirmed_today = (

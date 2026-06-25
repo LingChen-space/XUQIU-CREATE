@@ -168,6 +168,20 @@ class RadarApiTest(unittest.TestCase):
         self.assertEqual(len(clues), 1)
         self.assertEqual(clues[0].evidence[0].url, "https://example.com/evidence")
 
+    def test_summary_does_not_count_history_backfill_as_new_content(self):
+        async def scenario():
+            clue_id = await seed_clue()
+            async with Session() as session:
+                clue = await session.get(RadarClue, clue_id)
+                content_id = json.loads(clue.evidence_content_ids)[0]
+                content = await session.get(PlatformContent, content_id)
+                content.collected_at = datetime.now() - timedelta(days=1)
+                await session.commit()
+                return await get_radar_summary(db=session)
+
+        summary = asyncio.run(scenario())
+        self.assertEqual(summary.coverage.new_contents, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
