@@ -61,8 +61,19 @@ class ReportGenerator:
         else:
             template_summary = f"{report_date} 暂无满足阈值的新需求。"
 
-        # 每日 LLM 总结分析（失败回退模板）
+        report_stmt = select(DailyReport).where(DailyReport.report_date == report_date)
+        report_result = await self.session.execute(report_stmt)
+        report = report_result.scalar()
+        existing_summary = (report.summary or "").strip() if report else ""
+
+        # 每日 LLM 总结分析（失败回退模板）；重跑时不能用模板兜底覆盖已有 LLM 洞察。
         summary = await self._llm_summary(report_date, demands, top_demands, games_map, template_summary)
+        if (
+            existing_summary
+            and self._is_fallback_summary(summary)
+            and not self._is_fallback_summary(existing_summary)
+        ):
+            summary = existing_summary
 
         trending_game_ids = []
         seen_game_ids = set()
@@ -74,9 +85,6 @@ class ReportGenerator:
             if len(trending_game_ids) >= 5:
                 break
 
-        report_stmt = select(DailyReport).where(DailyReport.report_date == report_date)
-        report_result = await self.session.execute(report_stmt)
-        report = report_result.scalar()
         if report is None:
             report = DailyReport(id=str(uuid.uuid4()), report_date=report_date)
             self.session.add(report)
@@ -157,21 +165,37 @@ class ReportGenerator:
             f"今日数据：\n{context}"
         )
 
-        try:
-            resp = await client.chat.completions.create(
-                model=settings.llm_model,
-                messages=[
-                    {"role": "system", "content": "你是游戏工具需求分析师，用中文输出简洁专业的需求总结。"},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.5,
-                max_tokens=500,
-            )
-            text = (resp.choices[0].message.content or "").strip()
-            return text or fallback
-        except Exception as e:  # noqa: BLE001 - 回退模板，不阻断管线
-            print(f"[Report] LLM 总结生成失败，回退规则模板：{e}")
-            return fallback
+        last_error: Exception | None = None
+        token_budgets = [900, 1200]
+        for attempt, max_tokens in enumerate(token_budgets):
+            try:
+                resp = await client.chat.completions.create(
+                    model=settings.llm_model,
+                    messages=[
+                        {"role": "system", "content": "你是游戏工具需求分析师，用中文输出简洁专业的需求总结。"},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.5,
+                    max_tokens=max_tokens,
+                )
+                text = (resp.choices[0].message.content or "").strip()
+                if text:
+                    return text
+            except Exception as e:  # noqa: BLE001 - 回退模板，不阻断管线
+                last_error = e
+            if attempt == 0:
+                continue
+
+        if last_error is not None:
+            print(f"[Report] LLM 总结生成失败，回退规则模板：{last_error}")
+        else:
+            print("[Report] LLM 总结返回空内容，回退规则模板")
+        return fallback
+
+    def _is_fallback_summary(self, summary: str) -> bool:
+        """判断是否为规则模板摘要，而不是 LLM 生成的洞察文本。"""
+        text = (summary or "").strip()
+        return text.startswith("今日热点需求：") or "暂无满足阈值的新需求" in text
 
     async def _display_demands(self, report_date: date) -> list[Demand]:
         """与首页 dashboard 一致的需求口径，保证总结与展示一致。
