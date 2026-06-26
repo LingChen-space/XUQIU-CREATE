@@ -8,8 +8,11 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.models.game import Game
 from app.models.platform_content import PlatformContent
 from app.models.radar import ContentScanState
+from app.services.demand_keyword_rules import is_experience_server
+from app.services.experience_server_extractor import ExperienceServerExtractor
 from app.services.llm_client import build_async_client
 from app.services.radar import RadarService
 
@@ -55,6 +58,10 @@ class RadarModelReviewer:
         rows = (await self.session.execute(stmt)).all()
         if not rows:
             return 0
+
+        game = await self.session.get(Game, game_id)
+        if game is not None and is_experience_server(game.name):
+            return await self._review_experience_server(rows, current_time)
 
         review_rows = []
         for state, content in rows:
@@ -119,6 +126,44 @@ class RadarModelReviewer:
                     )
             await self.session.commit()
             return 0
+
+    async def _review_experience_server(
+        self,
+        rows: list,
+        current_time: datetime,
+    ) -> int:
+        """体验服游戏：用 LLM 批量提取版本/爆料需求词并写入线索。"""
+        states = [state for state, _ in rows]
+        contents = [content for _, content in rows]
+        try:
+            extractor = ExperienceServerExtractor(self.client)
+            findings_by_content = await extractor.extract_batch(contents)
+        except Exception as exc:
+            for state in states:
+                state.model_attempts = int(state.model_attempts or 0) + 1
+                state.last_error = str(exc)[:1000]
+                if state.model_attempts >= 3:
+                    state.model_status = "failed"
+                    state.next_retry_at = None
+                else:
+                    state.model_status = "retry_wait"
+                    state.next_retry_at = current_time + timedelta(
+                        minutes=RETRY_DELAYS_MINUTES[state.model_attempts - 1]
+                    )
+            await self.session.commit()
+            return 0
+
+        for state, content in rows:
+            await self.radar.apply_experience_findings(
+                content.id,
+                findings_by_content.get(content.id, []),
+            )
+            state.model_status = "completed"
+            state.model_scanned_at = current_time
+            state.next_retry_at = None
+            state.last_error = ""
+        await self.session.commit()
+        return len(contents)
 
     @staticmethod
     def _parse_findings(raw: str) -> list[dict]:

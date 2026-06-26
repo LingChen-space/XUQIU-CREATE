@@ -21,6 +21,7 @@ from app.models.radar import (
 from app.services.demand_keyword_rules import (
     DemandKeywordMatch,
     canonical_game_name,
+    is_experience_server,
     match_demand_keywords,
 )
 
@@ -63,7 +64,8 @@ class RadarService:
                     clues.append(clue)
         state.rule_status = "completed"
         state.rule_scanned_at = datetime.now()
-        if not clues:
+        # 体验服无标准词命中时保持 model_status=pending，交模型审阅阶段做版本/爆料提取
+        if not clues and not is_experience_server(game.name if game else ""):
             state.model_status = "completed"
             state.model_scanned_at = datetime.now()
         await self.session.commit()
@@ -148,6 +150,81 @@ class RadarService:
                 elif clue.total_score >= 80:
                     clue.level = RadarClueLevel.urgent
         await self.session.commit()
+        return clues
+
+    async def apply_experience_findings(
+        self,
+        content_id: str,
+        findings: list[dict],
+    ) -> list[RadarClue]:
+        """体验服版本/爆料提取结果写入：用提取的 term 创建/合并 new_demand 线索。"""
+        content = await self.session.get(PlatformContent, content_id)
+        if content is None:
+            return []
+        await self._ensure_scan_state(content.id)
+        text = self._content_text(content)
+        has_hot_node = bool(HOT_NODE_PATTERN.search(text))
+        clues: list[RadarClue] = []
+        for finding in findings:
+            term = str(finding.get("term") or "").strip()
+            if not term:
+                continue
+            signature = clue_signature(content.game_id, RadarClueType.new_demand, term)
+            clue = (
+                await self.session.execute(
+                    select(RadarClue).where(RadarClue.signature == signature)
+                )
+            ).scalar()
+            evidence_ids = self._json_list(clue.evidence_content_ids) if clue else []
+            if content.id not in evidence_ids:
+                evidence_ids.append(content.id)
+            evidence_count = len(evidence_ids)
+            level = RadarClueLevel.urgent if has_hot_node else RadarClueLevel.important
+            total_score = float(
+                min(100, (82 if has_hot_node else 66) + min(8, max(0, evidence_count - 1) * 3))
+            )
+            score_detail = {
+                "source": "experience_server_llm",
+                "independent_evidence_count": evidence_count,
+                "hot_node": has_hot_node,
+            }
+            reason = f"体验服版本/爆料提取：{term}，独立证据 {evidence_count} 条"
+            summary = str(finding.get("summary") or content.title or reason)[:1000]
+            if clue is None:
+                clue = RadarClue(
+                    signature=signature,
+                    game_id=content.game_id,
+                    clue_type=RadarClueType.new_demand,
+                    level=level,
+                    title=f"版本/爆料：{term}",
+                    summary=summary,
+                    term=term,
+                    trigger_reason=reason,
+                    evidence_content_ids=json.dumps(evidence_ids, ensure_ascii=False),
+                    score_detail=json.dumps(score_detail, ensure_ascii=False),
+                    engagement_detail="{}",
+                    suggested_tool_type="版本更新追踪",
+                    total_score=total_score,
+                )
+                self.session.add(clue)
+            else:
+                previous_level = clue.level
+                clue.evidence_content_ids = json.dumps(evidence_ids, ensure_ascii=False)
+                clue.level = self._max_level(clue.level, level)
+                clue.total_score = max(float(clue.total_score or 0), total_score)
+                clue.score_detail = json.dumps(score_detail, ensure_ascii=False)
+                clue.trigger_reason = reason
+                clue.last_seen_at = datetime.now()
+                if summary:
+                    clue.summary = summary
+                if (
+                    clue.status == RadarClueStatus.dismissed
+                    and self._max_level(previous_level, level) != previous_level
+                ):
+                    clue.status = RadarClueStatus.pending
+                    clue.suppressed_until = None
+            clues.append(clue)
+        await self.session.flush()
         return clues
 
     async def standard_terms_for_content(self, content_id: str) -> list[str]:

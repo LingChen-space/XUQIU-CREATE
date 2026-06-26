@@ -162,7 +162,9 @@ async def list_radar_clues_grouped(
     game_map = {g.id: g for g in games}
 
     # game_id -> {"game": Game, "terms": {normalized_term: 代表词}}
+    # term_games: 全局统计每个 normalized_term 出现在哪些游戏，用于跨游戏去重
     groups: dict[str, dict] = {}
+    term_games: dict[str, set] = {}
     for clue in clues:
         game = game_map.get(clue.game_id)
         if game is None:
@@ -170,6 +172,7 @@ async def list_radar_clues_grouped(
         norm = normalize_concept(clue.term)
         if not norm:
             continue
+        term_games.setdefault(norm, set()).add(clue.game_id)
         group = groups.setdefault(
             clue.game_id, {"game": game, "terms": {}}
         )
@@ -219,7 +222,14 @@ async def list_radar_clues_grouped(
     result = []
     for game_id, group in groups.items():
         game = group["game"]
-        terms = list(group["terms"].values())
+        # 跨游戏去重：同一词出现在 >=2 个游戏，说明是同一条内容被多个游戏
+        # 重复采集产生的副本(非该游戏专属需求词)，移除。阈值 2，调大可放宽。
+        terms = [
+            t for norm, t in group["terms"].items()
+            if len(term_games.get(norm, set())) < 2
+        ]
+        if not terms:
+            continue
         terms.sort(
             key=lambda t: (
                 -t["total_score"],

@@ -12,6 +12,15 @@ from pathlib import Path
 
 CATALOG_PATH = Path(__file__).resolve().parents[1] / "data" / "demand_keywords.json"
 
+# 体验服/测试服类游戏标记：这类游戏走 LLM 版本/爆料词提取，不套用标准工具词库。
+EXPERIENCE_SERVER_MARKERS: tuple[str, ...] = ("体验服", "测试服", "先遣服", "共研服", "内测", "封测")
+
+
+def is_experience_server(game_name: str) -> bool:
+    name = game_name or ""
+    return any(marker in name for marker in EXPERIENCE_SERVER_MARKERS)
+
+
 GAME_ALIASES: dict[str, tuple[str, ...]] = {
     "三角洲行动": ("三角洲行动", "三角洲行动体验服", "三角洲"),
     "失控进化": ("失控进化",),
@@ -166,6 +175,9 @@ def canonical_game_name(game_name: str) -> str | None:
 
 
 def rules_for_game(game_name: str) -> tuple[DemandKeywordRule, ...]:
+    # 体验服不使用标准工具词库，需求词由 LLM 版本/爆料提取产生。
+    if is_experience_server(game_name):
+        return ()
     catalog = load_keyword_catalog()
     canonical = canonical_game_name(game_name)
     selected = (*catalog["games"].get(canonical, ()), *catalog["generic"])

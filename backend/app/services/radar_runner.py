@@ -17,7 +17,11 @@ from app.models.radar import (
     RadarClueType,
 )
 from app.services.engagement_surge import EngagementSurgeDetector
-from app.services.demand_keyword_rules import match_demand_keywords, rules_for_game
+from app.services.demand_keyword_rules import (
+    is_experience_server,
+    match_demand_keywords,
+    rules_for_game,
+)
 from app.services.radar import RadarService, normalize_concept
 from app.services.radar_model import RadarModelReviewer
 
@@ -44,6 +48,9 @@ async def archive_nonstandard_radar_clues(session: AsyncSession) -> int:
         if clue.game_id not in games:
             games[clue.game_id] = await session.get(Game, clue.game_id)
         game = games[clue.game_id]
+        # 体验服走 LLM 版本/爆料提取，不套标准词库，不参与归档
+        if is_experience_server(game.name if game is not None else ""):
+            continue
         standard_terms = (
             {rule.canonical_term for rule in rules_for_game(game.name)}
             if game is not None
@@ -191,6 +198,7 @@ async def backfill_radar_history(session: AsyncSession) -> int:
                 existing.occurrence_count += 1
                 existing.last_seen_at = datetime.now()
     await session.commit()
+    # 归档无法归一到标准词库的历史待处理线索（仅工具侧/非体验服；体验服走 LLM 提取，函数内跳过）。
     await archive_nonstandard_radar_clues(session)
     return len(contents)
 
