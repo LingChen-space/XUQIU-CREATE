@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react"
-import { Search, Loader2, SlidersHorizontal, ArrowUpDown } from "lucide-react"
+import { Search, Loader2, SlidersHorizontal, ArrowUpDown, Megaphone } from "lucide-react"
 import { api } from "../api/client"
 import type { DemandCard } from "../types"
 import {
@@ -156,8 +156,7 @@ export default function DemandManagement({ onSelect, onCountChange }: Props) {
       ) : filtered.length > 0 ? (
         <div className="demand-game-groups">
           {groupedDemands.map((group) => {
-            const toolCount = group.demands.filter((d) => d.demand_category !== "experience_server").length
-            const experienceCount = group.count - toolCount
+            const isExperienceGroup = group.demands.some((d) => d.demand_category === "experience_server")
 
             return (
               <section key={group.gameId} className="demand-game-group">
@@ -167,15 +166,45 @@ export default function DemandManagement({ onSelect, onCountChange }: Props) {
                     <span className="chip game">{group.gameGenre}</span>
                   </div>
                   <div className="demand-game-group-meta">
-                    <span>{group.count} 个需求分支</span>
-                    {toolCount > 0 && <span>{toolCount} 个工具</span>}
-                    {experienceCount > 0 && <span>{experienceCount} 个体验服</span>}
-                    <strong>{group.topScore} 分</strong>
+                    {isExperienceGroup ? (
+                      <span>{group.count} 条体验服更新 · 仅展示</span>
+                    ) : (
+                      <>
+                        <span>{group.count} 个需求分支</span>
+                        <strong>{group.topScore} 分</strong>
+                      </>
+                    )}
                   </div>
                 </div>
 
-                <div className="demand-branch-list">
-                  {group.demands.map((d) => {
+                {isExperienceGroup ? (
+                  <div className="demand-branch-list" style={{
+                    borderLeft: "3px solid #10b981",
+                    background: "linear-gradient(180deg, #f0fdf4 0%, transparent 65%)",
+                    padding: "12px 14px", borderRadius: 8,
+                  }}>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>
+                      体验服版本/爆料 · 仅合并展示，不参与评估
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {group.demands.map((d) => {
+                        const term = (d.title.split("版本/爆料：")[1] || d.title).trim()
+                        return (
+                          <span key={d.id} style={{
+                            display: "inline-flex", alignItems: "center", gap: 6,
+                            padding: "6px 12px", borderRadius: 16,
+                            background: "#ecfdf5", color: "#047857",
+                            border: "1px solid #bbf7d0", fontSize: 13, fontWeight: 500,
+                          }}>
+                            <Megaphone size={13} />{term}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="demand-branch-list">
+                    {group.demands.map((d) => {
                     const score = Math.round(d.potential_score)
                     const categoryTone = d.demand_category === "experience_server"
                       ? { background: "#ecfdf5", color: "#047857" }
@@ -250,6 +279,7 @@ export default function DemandManagement({ onSelect, onCountChange }: Props) {
                     )
                   })}
                 </div>
+                )}
               </section>
             )
           })}
