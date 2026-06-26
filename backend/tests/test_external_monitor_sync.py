@@ -413,7 +413,7 @@ class ExternalMonitorSyncTest(unittest.TestCase):
         self.assertEqual(status["last_new_contents"], 1)
         self.assertEqual(get_tap_kb_sync_status()["last_new_records"][0]["title"], f"{GAME_NAME}\u5730\u56fe\u70b9\u4f4d\u66f4\u65b0")
 
-    def test_api_client_posts_signed_tap_and_hykb_requests(self):
+    def test_api_client_posts_signed_tap_and_hykb_requests_by_default(self):
         calls: list[dict] = []
 
         async def post_form(url: str, data: dict):
@@ -434,6 +434,30 @@ class ExternalMonitorSyncTest(unittest.TestCase):
         self.assertEqual([c["data"]["last_id"] for c in calls], [88, 99])
         self.assertEqual(calls[0]["data"]["time"], 1700000000)
         self.assertEqual(calls[0]["data"]["sign"], "4639dc588670101013c09d854e44d8c6")
+
+    def test_api_client_can_fetch_only_hykb_for_script_collection(self):
+        calls: list[dict] = []
+
+        async def post_form(url: str, data: dict):
+            calls.append({"url": url, "data": data})
+            return {"code": 200, "last_id": 120, "data": []}
+
+        client = TapKbApiClient(
+            api_url="http://example.test/api.php",
+            secret="secret",
+            clock=lambda: 1700000000,
+            post_form=post_form,
+        )
+
+        result = asyncio.run(client.fetch_contents(
+            days=30,
+            last_ids={"tap": 88, "hykb": 99},
+            feed_types=("hykb",),
+        ))
+
+        self.assertEqual(result["last_ids"], {"hykb": 120})
+        self.assertEqual([c["data"]["type"] for c in calls], ["hykb"])
+        self.assertEqual([c["data"]["last_id"] for c in calls], [99])
 
     def test_api_client_preserves_enriched_export_fields(self):
         async def post_form(url: str, data: dict):

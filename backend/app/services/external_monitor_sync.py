@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 SOURCE_KEY = "tap_kb_forum"
 SOURCE_LABEL = "Tap + 快爆论坛"
 FEED_TYPES = ("tap", "hykb")
+FEED_PLATFORM_LABELS = {
+    "tap": "TapTap",
+    "hykb": "快爆论坛",
+}
 
 LAST_SYNC_STATUS: dict[str, Any] = {
     "source_key": SOURCE_KEY,
@@ -165,8 +169,13 @@ class TapKbExportClient:
     def configured(self) -> bool:
         return True
 
-    async def fetch_contents(self, days: int, last_ids: dict[str, int] | None = None):
-        del days, last_ids
+    async def fetch_contents(
+        self,
+        days: int,
+        last_ids: dict[str, int] | None = None,
+        feed_types: tuple[str, ...] | None = None,
+    ):
+        del days, last_ids, feed_types
         return []
 
     async def fetch_configs(self) -> list[dict]:
@@ -203,13 +212,20 @@ class TapKbApiClient(TapKbExportClient):
             raise RuntimeError("Tap+快爆接口返回格式不是 JSON 对象")
         return payload
 
-    async def fetch_contents(self, days: int, last_ids: dict[str, int] | None = None) -> dict:
+    async def fetch_contents(
+        self,
+        days: int,
+        last_ids: dict[str, int] | None = None,
+        feed_types: tuple[str, ...] | None = None,
+    ) -> dict:
         del days
         last_ids = last_ids or {}
+        active_feeds = tuple(feed_type for feed_type in (feed_types or FEED_TYPES) if feed_type in FEED_TYPES)
         records: list[dict] = []
         next_last_ids: dict[str, int] = {}
 
-        for feed_type, platform_label in (("tap", "TapTap"), ("hykb", "快爆论坛")):
+        for feed_type in active_feeds:
+            platform_label = FEED_PLATFORM_LABELS[feed_type]
             current_time = int(self.clock())
             data = {
                 "type": feed_type,
@@ -253,7 +269,13 @@ class TapKbForumSyncService:
         self.session = session
         self.client = client or TapKbApiClient()
 
-    async def sync(self, days: int = 30, force: bool = False, reason: str = "manual") -> dict:
+    async def sync(
+        self,
+        days: int = 30,
+        force: bool = False,
+        reason: str = "manual",
+        feed_types: tuple[str, ...] | None = None,
+    ) -> dict:
         if not self.client.configured:
             return self._set_status(
                 "not_configured",
@@ -266,7 +288,10 @@ class TapKbForumSyncService:
 
         try:
             saved_last_ids = {} if force else await self._get_last_ids()
-            content_result = await self.client.fetch_contents(days, last_ids=saved_last_ids)
+            if feed_types is None:
+                content_result = await self.client.fetch_contents(days, last_ids=saved_last_ids)
+            else:
+                content_result = await self.client.fetch_contents(days, last_ids=saved_last_ids, feed_types=feed_types)
             raw_contents, returned_last_ids = self._split_content_result(content_result)
             raw_configs = await self.client.fetch_configs()
             await self._store_raw_records(raw_contents, returned_last_ids)
@@ -276,7 +301,7 @@ class TapKbForumSyncService:
                 await self._save_last_ids(returned_last_ids)
             return self._set_status(
                 "completed",
-                f"Tap + 快爆论坛同步完成：内容入库 {content_stats['inserted']} 条，配置同步 {config_stats['upserted']} 条。",
+                self._success_message(content_stats, config_stats, feed_types),
                 content_stats,
                 config_stats,
                 returned_last_ids,
@@ -636,6 +661,15 @@ class TapKbForumSyncService:
             "upserted": 0,
             "skipped": 0,
         }
+
+    @staticmethod
+    def _success_message(content_stats: dict, config_stats: dict, feed_types: tuple[str, ...] | None) -> str:
+        label = "快爆论坛" if feed_types == ("hykb",) else "Tap + 快爆论坛"
+        suffix = "（Tap脚本采集已关闭）" if feed_types == ("hykb",) else ""
+        return (
+            f"{label}同步完成{suffix}：内容入库 {content_stats['inserted']} 条，"
+            f"配置同步 {config_stats['upserted']} 条。"
+        )
 
 
 def get_tap_kb_sync_status() -> dict:

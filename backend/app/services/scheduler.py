@@ -43,10 +43,15 @@ def should_run_daily_catchup(
 
 
 async def run_tap_kb_realtime_sync():
-    """增量同步 Tap+快爆后台，并立即触发早期雷达扫描。"""
+    """增量同步快爆论坛后台，并立即触发早期雷达扫描。Tap 来源当前关闭。"""
     async with async_session() as session:
         try:
-            result = await TapKbForumSyncService(session).sync(days=30, force=False, reason="auto")
+            result = await TapKbForumSyncService(session).sync(
+                days=30,
+                force=False,
+                reason="auto",
+                feed_types=("hykb",),
+            )
             inserted = result.get("contents", {}).get("inserted", 0)
             if inserted:
                 logger.info(f"[TapKbRealtimeSync] 同步到 {inserted} 条新内容")
@@ -131,6 +136,7 @@ async def run_daily_pipeline(force_recrawl: bool = False):
                     days=30,
                     force=force_recrawl,
                     reason="pipeline",
+                    feed_types=("hykb",),
                 )
                 logger.info(f"[DailyPipeline] 外部同步完成 - {external_sync.get('message', '')}")
 
@@ -270,7 +276,7 @@ def start_scheduler():
         run_tap_kb_realtime_sync,
         trigger=IntervalTrigger(minutes=1),
         id="tap_kb_realtime_sync",
-        name="Tap+快爆后台实时增量同步",
+        name="快爆论坛后台实时增量同步（Tap已关闭）",
         replace_existing=True,
         max_instances=1,
         coalesce=True,
@@ -305,7 +311,7 @@ def start_scheduler():
     scheduler.start()
     logger.info(
         f"调度器已启动 - 每日 {settings.schedule_hour:02d}:{settings.schedule_minute:02d} 完整分析，"
-        "Tap+快爆及雷达每1分钟，重点游戏探索每5分钟，普通游戏探索每30分钟"
+        "快爆论坛及雷达每1分钟，重点游戏探索每5分钟，普通游戏探索每30分钟（Tap已关闭）"
     )
 
 

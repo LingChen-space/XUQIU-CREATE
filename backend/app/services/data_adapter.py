@@ -81,6 +81,7 @@ MONITOR_PLATFORM_ENDPOINTS: dict[str, str] = {
     "taptap": "/taptap",
     "douyin": "/douyin",
 }
+DISABLED_SCRIPT_COLLECTION_PLATFORMS = {"taptap"}
 
 
 def exploration_keywords_for_game(game_name: str) -> list[str]:
@@ -707,6 +708,8 @@ class DataAdapter:
         today = datetime.now().date()
         for cfg in configs:
             platform_key = cfg.platform
+            if platform_key in DISABLED_SCRIPT_COLLECTION_PLATFORMS:
+                continue
             if platform_key not in MONITOR_PLATFORM_ENDPOINTS:
                 continue
             keywords = [kw.strip() for kw in cfg.keywords.split(",") if kw.strip()]
@@ -1044,6 +1047,8 @@ class DataAdapter:
         failed = 0
         for game in games:
             for platform, config in config_by_platform.items():
+                if platform in DISABLED_SCRIPT_COLLECTION_PLATFORMS:
+                    continue
                 # 跳过抖音探索：探索用游戏名+别名搜索会弹出真实浏览器窗口
                 # (headless=False)，与后台配置的搜索词采集无关，且每 5 分钟一轮扰民。
                 # 抖音只走配置词采集 (ingest_contents → crawl_progress)。如需恢复探索，
