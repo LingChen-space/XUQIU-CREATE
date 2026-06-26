@@ -37,6 +37,9 @@ export const api = {
   createGame: (data: any) => request<any>('/games', { method: 'POST', body: JSON.stringify(data) }),
   updateGame: (id: string, data: any) => request<any>(`/games/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteGame: (id: string) => request<any>(`/games/${id}`, { method: 'DELETE' }),
+  getGameTaptapGroup: (id: string) => request<{ group_id: string }>(`/games/${id}/taptap-group`),
+  setGameTaptapGroup: (id: string, group_id: string) =>
+    request<any>(`/games/${id}/taptap-group`, { method: 'PUT', body: JSON.stringify({ group_id }) }),
   triggerPipeline: (options: { force_recrawl?: boolean } = {}) =>
     request<PipelineRunResult>('/pipeline/run', { method: 'POST', body: JSON.stringify(options) }),
   health: () => request<any>('/health'),

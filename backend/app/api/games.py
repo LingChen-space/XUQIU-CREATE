@@ -2,12 +2,20 @@
 
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.game import Game, GameGenre, GameStatus, default_priority_weight
+from app.models.platform_search_config import PlatformSearchConfig
 from app.schemas.game import GameCreate, GameUpdate, GameOut
+
+TAP_PROXY_PLATFORM = "taptap"
+
+
+class TapTapGroupPayload(BaseModel):
+    group_id: str = ""
 
 router = APIRouter(prefix="/api/games", tags=["games"])
 
@@ -136,3 +144,60 @@ async def delete_game(game_id: str, db: AsyncSession = Depends(get_db)):
     await db.delete(game)
     await db.commit()
     return {"ok": True, "id": game_id}
+
+
+@router.get("/{game_id}/taptap-group")
+async def get_game_taptap_group(game_id: str, db: AsyncSession = Depends(get_db)):
+    """获取游戏绑定的 TapTap 分组 group_id（Tap接口配置，供代理同步读取）。"""
+    cfg = (
+        await db.execute(
+            select(PlatformSearchConfig).where(
+                PlatformSearchConfig.game_id == game_id,
+                PlatformSearchConfig.platform == TAP_PROXY_PLATFORM,
+            )
+        )
+    ).scalar()
+    return {"group_id": (cfg.keywords or "") if cfg else ""}
+
+
+@router.put("/{game_id}/taptap-group")
+async def set_game_taptap_group(
+    game_id: str,
+    payload: TapTapGroupPayload,
+    db: AsyncSession = Depends(get_db),
+):
+    """设置/清空游戏的 TapTap 分组 group_id（写入 platform_search_configs platform=taptap）。"""
+    game = (await db.execute(select(Game).where(Game.id == game_id))).scalar()
+    if not game:
+        raise HTTPException(status_code=404, detail="游戏不存在")
+
+    group_id = (payload.group_id or "").strip()
+    cfg = (
+        await db.execute(
+            select(PlatformSearchConfig).where(
+                PlatformSearchConfig.game_id == game_id,
+                PlatformSearchConfig.platform == TAP_PROXY_PLATFORM,
+            )
+        )
+    ).scalar()
+
+    if not group_id:
+        if cfg is not None:
+            await db.delete(cfg)
+    elif cfg is None:
+        db.add(PlatformSearchConfig(
+            id=str(uuid.uuid4()),
+            game_id=game_id,
+            platform=TAP_PROXY_PLATFORM,
+            keywords=group_id,
+            enabled=True,
+            crawl_count=10,
+            source_key="tap_proxy",
+        ))
+    else:
+        cfg.keywords = group_id
+        cfg.enabled = True
+        cfg.source_key = "tap_proxy"
+
+    await db.commit()
+    return {"ok": True, "game_id": game_id, "group_id": group_id}

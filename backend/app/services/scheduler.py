@@ -20,6 +20,7 @@ from app.services.signal_engine import SignalEngine
 from app.services.llm_pipeline import LLMPipeline
 from app.services.report_generator import ReportGenerator
 from app.services.radar_runner import run_radar_scan_cycle
+from app.services.tap_proxy_sync import TapProxySyncService
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,21 @@ async def run_regular_game_exploration():
             return result
         except Exception as exc:
             logger.exception(f"[RadarRegularExploration] 执行失败: {exc}")
+            return {"ok": False, "message": str(exc)}
+
+
+async def run_tap_proxy_sync():
+    """TapTap 代理分组 Feed 同步（走自建代理 1.117.17.251，非本地IP采集）。
+
+    按 platform_search_configs(platform=taptap) 配置的 group_id→游戏 拉取，每30分钟一次。
+    """
+    async with async_session() as session:
+        try:
+            result = await TapProxySyncService(session).sync()
+            logger.info(f"[TapProxySync] {result.get('message')}")
+            return result
+        except Exception as exc:
+            logger.exception(f"[TapProxySync] 执行失败: {exc}")
             return {"ok": False, "message": str(exc)}
 
 
@@ -308,10 +324,20 @@ def start_scheduler():
         max_instances=1,
         coalesce=True,
     )
+    scheduler.add_job(
+        run_tap_proxy_sync,
+        trigger=IntervalTrigger(minutes=30),
+        id="tap_proxy_sync",
+        name="TapTap代理分组Feed同步",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
     scheduler.start()
     logger.info(
         f"调度器已启动 - 每日 {settings.schedule_hour:02d}:{settings.schedule_minute:02d} 完整分析，"
-        "快爆论坛及雷达每1分钟，重点游戏探索每5分钟，普通游戏探索每30分钟（Tap已关闭）"
+        "快爆论坛及雷达每1分钟，重点游戏探索每5分钟，普通游戏探索每30分钟，"
+        "TapTap代理分组Feed每30分钟（Tap走代理接口，非本地IP采集）"
     )
 
 

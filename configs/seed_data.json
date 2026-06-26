@@ -1,6 +1,6 @@
 {
   "description": "需求发生工具 - 游戏管理和搜索词配置种子数据",
-  "exported_at": "2026-06-12",
+  "exported_at": "2026-06-26",
   "games": [
     {
       "id": "c784f953-fb68-4b86-bfa6-810e4837f1b1",
@@ -111,6 +111,72 @@
       "cover_url": "",
       "description": "",
       "notes": ""
+    },
+    {
+      "id": "789b2e0f-58d6-4eef-bfbb-8c0eb64506ec",
+      "name": "和平精英",
+      "genre": "fps",
+      "publisher": "腾讯",
+      "status": "operating",
+      "haoyou_id": "",
+      "cover_url": "",
+      "description": "",
+      "notes": ""
+    },
+    {
+      "id": "051cb763-ef2c-4011-b3b3-129c1ada4904",
+      "name": "王者荣耀",
+      "genre": "moba",
+      "publisher": "腾讯",
+      "status": "operating",
+      "haoyou_id": "",
+      "cover_url": "",
+      "description": "",
+      "notes": ""
+    },
+    {
+      "id": "49deb39e-4fe8-4323-8562-11e93fa9440f",
+      "name": "蛋仔派对",
+      "genre": "casual",
+      "publisher": "网易",
+      "status": "operating",
+      "haoyou_id": "",
+      "cover_url": "",
+      "description": "",
+      "notes": ""
+    },
+    {
+      "id": "b82b415f-12a3-49a8-aad0-ab59599c904c",
+      "name": "明日方舟：终末地",
+      "genre": "rpg",
+      "publisher": "鹰角网络",
+      "status": "testing",
+      "haoyou_id": "",
+      "cover_url": "",
+      "description": "",
+      "notes": ""
+    },
+    {
+      "id": "4ed59e4a-bdf5-439c-a30d-0dc96cd6fa57",
+      "name": "暗区突围",
+      "genre": "fps",
+      "publisher": "腾讯",
+      "status": "operating",
+      "haoyou_id": "",
+      "cover_url": "",
+      "description": "",
+      "notes": ""
+    },
+    {
+      "id": "ccaebf3e-d74f-42e8-8b16-a5c70e8cac81",
+      "name": "超自然行动",
+      "genre": "other",
+      "publisher": "",
+      "status": "operating",
+      "haoyou_id": "",
+      "cover_url": "",
+      "description": "",
+      "notes": ""
     }
   ],
   "platform_search_configs": [
@@ -140,6 +206,136 @@
       "enabled": 1,
       "crawl_count": 40,
       "proxy_url": null
+    },
+    {
+      "id": "427e10b6-b7c5-4cfb-8a24-527d7ce01bfa",
+      "game_id": "c784f953-fb68-4b86-bfa6-810e4837f1b1",
+      "platform": "taptap",
+      "keywords": "531928",
+      "enabled": 1,
+      "crawl_count": 10,
+      "proxy_url": null,
+      "source_key": "tap_proxy"
+    },
+    {
+      "id": "4c31f914-3ffc-401a-8711-edfac53b9510",
+      "game_id": "eb44c53e-de26-41c0-b1e7-cece633780a2",
+      "platform": "taptap",
+      "keywords": "874351",
+      "enabled": 1,
+      "crawl_count": 10,
+      "proxy_url": null,
+      "source_key": "tap_proxy"
+    },
+    {
+      "id": "e3914b4e-8855-4ea0-9e17-0c235922c993",
+      "game_id": "314ee25b-c894-4286-a975-ea686e46d3fe",
+      "platform": "taptap",
+      "keywords": "805079",
+      "enabled": 1,
+      "crawl_count": 10,
+      "proxy_url": null,
+      "source_key": "tap_proxy"
+    },
+    {
+      "id": "c5acba9c-427e-4dff-97ce-87cd4852ab93",
+      "game_id": "2cd34ed8-697a-4d01-a344-8ccc124fdb78",
+      "platform": "taptap",
+      "keywords": "330015",
+      "enabled": 1,
+      "crawl_count": 10,
+      "proxy_url": null,
+      "source_key": "tap_proxy"
+    },
+    {
+      "id": "89cd00a4-24cf-4eec-baa1-fc378119ae04",
+      "game_id": "abe54c93-b2d7-411f-a2b0-995b550778fa",
+      "platform": "taptap",
+      "keywords": "201765",
+      "enabled": 1,
+      "crawl_count": 10,
+      "proxy_url": null,
+      "source_key": "tap_proxy"
+    },
+    {
+      "id": "ecb82e64-b38b-4799-85b0-598d4697fbb9",
+      "game_id": "789b2e0f-58d6-4eef-bfbb-8c0eb64506ec",
+      "platform": "taptap",
+      "keywords": "53791",
+      "enabled": 1,
+      "crawl_count": 10,
+      "proxy_url": null,
+      "source_key": "tap_proxy"
+    },
+    {
+      "id": "a9c7c7b7-ab3c-4152-b98b-c7558bf2df08",
+      "game_id": "051cb763-ef2c-4011-b3b3-129c1ada4904",
+      "platform": "taptap",
+      "keywords": "128",
+      "enabled": 1,
+      "crawl_count": 10,
+      "proxy_url": null,
+      "source_key": "tap_proxy"
+    },
+    {
+      "id": "723d4aaa-925c-400a-a552-cf374e5782d5",
+      "game_id": "7ab70acd-2ca9-4a05-b0da-304718d1cdb5",
+      "platform": "taptap",
+      "keywords": "311675",
+      "enabled": 1,
+      "crawl_count": 10,
+      "proxy_url": null,
+      "source_key": "tap_proxy"
+    },
+    {
+      "id": "24ff8d25-2a73-4cd8-a9c2-4dd36a11cb72",
+      "game_id": "8ed18bc7-206e-4598-b720-a15b679c79ee",
+      "platform": "taptap",
+      "keywords": "228326",
+      "enabled": 1,
+      "crawl_count": 10,
+      "proxy_url": null,
+      "source_key": "tap_proxy"
+    },
+    {
+      "id": "f6a9e471-ef9b-4153-9f34-f6e8130d086e",
+      "game_id": "49deb39e-4fe8-4323-8562-11e93fa9440f",
+      "platform": "taptap",
+      "keywords": "286565",
+      "enabled": 1,
+      "crawl_count": 10,
+      "proxy_url": null,
+      "source_key": "tap_proxy"
+    },
+    {
+      "id": "a369a661-6027-4bfc-a299-4f5e2f8f48b5",
+      "game_id": "b82b415f-12a3-49a8-aad0-ab59599c904c",
+      "platform": "taptap",
+      "keywords": "323017",
+      "enabled": 1,
+      "crawl_count": 10,
+      "proxy_url": null,
+      "source_key": "tap_proxy"
+    },
+    {
+      "id": "00227246-8f31-4795-87c4-423980161f63",
+      "game_id": "4ed59e4a-bdf5-439c-a30d-0dc96cd6fa57",
+      "platform": "taptap",
+      "keywords": "307486",
+      "enabled": 1,
+      "crawl_count": 10,
+      "proxy_url": null,
+      "source_key": "tap_proxy"
+    },
+    {
+      "id": "9ca81bd8-8880-4ee7-97f0-43f0bb9c3703",
+      "game_id": "ccaebf3e-d74f-42e8-8b16-a5c70e8cac81",
+      "platform": "taptap",
+      "keywords": "805089",
+      "enabled": 1,
+      "crawl_count": 10,
+      "proxy_url": null,
+      "source_key": "tap_proxy"
     }
   ]
 }

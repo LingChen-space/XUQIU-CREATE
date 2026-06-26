@@ -454,7 +454,7 @@ export default function SearchConfigPage() {
         搜索词为全局配置，自动应用于游戏管理列表中的所有活跃游戏。
         例如在「抖音」配置「配装计算器, 战备阈值」，设置抓取条数 100 后，管线会对所有活跃游戏抓取抖音上最近 100 条相关视频/帖子，纳入信号计算。
         每个平台只需配置一次，关键词用逗号分隔。抓取条数范围 10-1000 条，建议 50-200 条。
-        代理地址仅用于 TapTap：自动抓取会先直连，遇到 TapTap 风控 405 后再切换代理。
+        TapTap（Tap接口配置，非本地IP采集）：TapTap 已停用本地采集，改走自建代理接口(1.117.17.251)每30分钟拉分组 Feed、翻2页、自动去重。配置方式：在 platform_search_configs 表按游戏新增 platform=taptap、keywords=TapTap分组group_id、game_id=归属游戏、enabled=1（每个 group 一条，挂对应游戏）。
       </div>
     </div>
   )

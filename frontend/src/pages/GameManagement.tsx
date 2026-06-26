@@ -40,18 +40,24 @@ export default function GameManagement({ onCountChange }: Props) {
   const handleSave = async (form: Record<string, string>) => {
     setSaving(true)
     setError("")
+    const taptapGroupId = (form.taptap_group_id || "").trim()
     const payload: Record<string, string | number> = { ...form }
+    delete payload.taptap_group_id
     if (payload.priority_weight === "") {
       delete payload.priority_weight
     } else {
       payload.priority_weight = Number(payload.priority_weight)
     }
     try {
+      let gameId: string
       if (editingGame) {
         await api.updateGame(editingGame.id, payload)
+        gameId = editingGame.id
       } else {
-        await api.createGame(payload)
+        const created = await api.createGame(payload)
+        gameId = created.id
       }
+      await api.setGameTaptapGroup(gameId, taptapGroupId)
       setShowForm(false)
       await fetchGames()
     } catch (e: any) {
@@ -256,9 +262,19 @@ function GameFormModal({ game, onSave, onClose, saving, error }: {
     priority_weight: game ? String(game.priority_weight || 1) : "",
     description: game?.description || "",
     notes: game?.notes || "",
+    taptap_group_id: "",
   })
 
   const set = (k: string, v: string) => setForm((prev) => ({ ...prev, [k]: v }))
+
+  useEffect(() => {
+    if (!game) return
+    let active = true
+    api.getGameTaptapGroup(game.id)
+      .then((res) => { if (active) set("taptap_group_id", res.group_id || "") })
+      .catch(() => {})
+    return () => { active = false }
+  }, [game])
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -307,6 +323,10 @@ function GameFormModal({ game, onSave, onClose, saving, error }: {
               <option value="4">4x 高重点</option>
               <option value="5">5x 最高</option>
             </select>
+          </div>
+          <div className="form-group">
+            <label>TapTap 分组 group_id（Tap接口配置）</label>
+            <input className="form-input" value={form.taptap_group_id} onChange={(e) => set("taptap_group_id", e.target.value)} placeholder="如 531928，多个用逗号分隔；留空则不拉该游戏的 TapTap 分组" />
           </div>
           <div className="form-group">
             <label>简介</label>

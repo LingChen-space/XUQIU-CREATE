@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     tap_kb_config_export_url: str = ""
     tap_kb_api_key: str = ""
 
+    # TapTap 代理 API（自建代理 1.117.17.251，HMAC-SHA256 签名 GET）
+    # 区别于 Tap+快爆后台同步(tap_kb_*)：本接口直连 TapTap 代理拉分组 Feed，
+    # 由代理服务器代抓，本地 IP 不直接采集 TapTap。group_id→游戏 在采集配置里维护。
+    tap_proxy_api_url: str = "http://1.117.17.251:10890/api/v1"
+    tap_proxy_api_secret: str = "a38f0c1fa52641908dfb90a735cd161e"
+    tap_proxy_max_pages: int = 2
+
     # LLM API（用户提供）
     llm_api_base: str = ""
     llm_api_key: str = ""
