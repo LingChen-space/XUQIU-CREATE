@@ -37,12 +37,33 @@ class DailySummaryAnalysis(BaseModel):
     summary_text: str = ""                # auto-generated paragraph
 
 
+class DashboardRadarClue(BaseModel):
+    id: str
+    game_id: str
+    game_name: str
+    title: str
+    term: str = ""
+    summary: str = ""
+    level: str
+    status: str
+    clue_type: str
+    suggested_tool_type: str = ""
+    total_score: float = 0.0
+    keyword_priority: str = ""
+    keyword_category: str = ""
+    evidence_count: int = 0
+    first_seen_at: datetime
+    last_seen_at: datetime
+
+
 class DashboardSummary(BaseModel):
     """看板首页概览。"""
     today_date: date
     today_analysis_completed: bool = False
     total_demands_today: int
+    radar_clues: list[DashboardRadarClue] = []
     top_demands: list[DemandCard]
+    experience_server_demands: list[DemandCard] = []
     trending_games: list[dict]
     tool_type_distribution: dict[str, int]
     latest_report_summary: str = ""

@@ -97,33 +97,62 @@ class DemandThemeAnalysisTest(unittest.TestCase):
         self.assertGreaterEqual(welfare["potential_score"], 80)
         self.assertEqual(welfare["evidence_post_ids"], ["a", "b", "c"])
 
-    def test_game_analysis_can_return_multiple_theme_demands(self):
-        async def get_contents(game_id, window_date, limit=None):
-            return [
-                content("三角洲行动体验服卡战备怎么搞", "配装和战备值看不懂", 150, 80, 10000, "a"),
-                content("三角洲行动体验服核电站地图点位", "资源点和撤离路线汇总", 170, 95, 12000, "b"),
-            ]
+    def test_experience_server_demand_analyses_from_radar_clues(self):
+        from app.models.radar import RadarClueStatus, RadarClueType
 
-        async def get_signals_for_game(game_id, window_date):
-            return {"内容热度": 80}
+        class _Result:
+            def __init__(self, items):
+                self._items = items
 
-        self.pipeline.client = None
-        self.pipeline._get_recent_contents = get_contents
-        self.pipeline.engine = SimpleNamespace(get_signals_for_game=get_signals_for_game)
+            def scalars(self):
+                return self
 
-        analyses = asyncio.run(self.pipeline._analyze_game_demands(
+            def all(self):
+                return self._items
+
+        class _Session:
+            def __init__(self, clues):
+                self._clues = clues
+
+            async def execute(self, stmt):
+                return _Result(self._clues)
+
+        clues = [
+            SimpleNamespace(
+                term="7月9日开服",
+                title="版本/爆料：7月9日开服",
+                clue_type=RadarClueType.new_demand,
+                status=RadarClueStatus.pending,
+                total_score=82.0,
+                last_seen_at=datetime.now(),
+                evidence_content_ids='["c1","c2"]',
+                score_detail='{"source":"experience_server_llm"}',
+            ),
+            SimpleNamespace(
+                term="6月22日爆料",
+                title="版本/爆料：6月22日爆料",
+                clue_type=RadarClueType.new_demand,
+                status=RadarClueStatus.pending,
+                total_score=80.0,
+                last_seen_at=datetime.now(),
+                evidence_content_ids='["c3"]',
+                score_detail='{"source":"experience_server_llm"}',
+            ),
+        ]
+        self.pipeline.session = _Session(clues)
+
+        analyses = asyncio.run(self.pipeline._experience_server_demand_analyses(
             SimpleNamespace(id="game-1", name="三角洲行动体验服", priority_weight=3),
             datetime.now().date(),
         ))
 
-        tool_types = {a["tool_type_suggestion"] for a in analyses}
-        self.assertIn("配装/战备工具", tool_types)
-        self.assertIn("交互地图", tool_types)
-        self.assertTrue(all(a["allow_auto_promote"] is False for a in analyses))
-        self.assertEqual(
-            {a["standard_term"] for a in analyses},
-            {"卡战备", "地图点位"},
-        )
+        self.assertEqual(len(analyses), 2)
+        self.assertTrue(all(a["allow_auto_promote"] is True for a in analyses))
+        titles = " ".join(a["tool_title"] for a in analyses)
+        self.assertIn("7月9日开服", titles)
+        self.assertIn("6月22日爆料", titles)
+        # 体验服不再走标准工具词库
+        self.assertNotIn("卡战备", {a.get("standard_term") for a in analyses})
 
     def test_non_priority_game_analysis_only_uses_generic_terms(self):
         analyses = self.pipeline._keyword_analysis_from_contents(
@@ -145,6 +174,54 @@ class DemandThemeAnalysisTest(unittest.TestCase):
             {analysis["standard_term"] for analysis in analyses},
             {"战绩查询"},
         )
+
+    def test_repeated_standard_tool_terms_can_create_daily_tool_card(self):
+        analyses = self.pipeline._keyword_analysis_from_contents(
+            SimpleNamespace(name="洛克王国世界", priority_weight=3),
+            [
+                content(
+                    "洛克王国世界互动地图工具太好用了",
+                    "精灵分布和宝箱资源位置都能查",
+                    100,
+                    50,
+                    5000,
+                    "a",
+                ),
+                content(
+                    "简单三步使用洛克王国互动地图",
+                    "跑图路线和资源点标记非常清楚",
+                    80,
+                    40,
+                    4000,
+                    "b",
+                ),
+            ],
+            {},
+        )
+
+        map_analysis = next(a for a in analyses if a["standard_term"] == "互动地图")
+        self.assertTrue(map_analysis["allow_auto_promote"])
+        self.assertEqual(map_analysis["tool_type_suggestion"], "交互地图")
+        self.assertEqual(map_analysis["evidence_post_ids"], ["a", "b"])
+
+    def test_single_standard_tool_term_stays_in_radar_only(self):
+        analyses = self.pipeline._keyword_analysis_from_contents(
+            SimpleNamespace(name="洛克王国世界", priority_weight=3),
+            [
+                content(
+                    "洛克王国世界异色日记工具",
+                    "可以统计异色抓取进度",
+                    100,
+                    50,
+                    5000,
+                    "a",
+                ),
+            ],
+            {},
+        )
+
+        analysis = next(a for a in analyses if a["standard_term"] == "异色日记")
+        self.assertFalse(analysis["allow_auto_promote"])
 
     def test_locke_domain_terms_create_breeding_mechanism_demand(self):
         analyses = self.pipeline._theme_analysis_from_contents(

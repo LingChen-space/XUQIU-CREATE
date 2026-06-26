@@ -1,9 +1,10 @@
 """Dashboard summary tests."""
 
 import asyncio
+import json
 import tempfile
 import unittest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,6 +15,7 @@ from app.database import Base
 from app.models.daily_report import DailyReport
 from app.models.demand import Demand, ToolType
 from app.models.game import Game, GameGenre, GameStatus
+from app.models.radar import RadarClue, RadarClueLevel, RadarClueStatus, RadarClueType
 
 test_db_path = Path(tempfile.gettempdir()) / "req_gen_dashboard_summary_test.db"
 test_engine = create_async_engine(f"sqlite+aiosqlite:///{test_db_path}", echo=False)
@@ -57,6 +59,73 @@ async def seed_demands(demand_dates: list[date]):
                 tool_feasibility=3,
                 demand_date=demand_date,
             ))
+        await session.commit()
+
+
+async def seed_radar_clues(display_date: date):
+    async with TestSession() as session:
+        game = Game(
+            name="洛克王国世界",
+            genre=GameGenre.rpg,
+            status=GameStatus.operating,
+            priority_weight=3,
+        )
+        experience_game = Game(
+            name="洛克王国世界体验服",
+            genre=GameGenre.rpg,
+            status=GameStatus.operating,
+            priority_weight=3,
+        )
+        session.add_all([game, experience_game])
+        await session.flush()
+
+        session.add_all([
+            RadarClue(
+                signature="radar:locke:map",
+                game_id=game.id,
+                clue_type=RadarClueType.new_demand,
+                level=RadarClueLevel.important,
+                status=RadarClueStatus.pending,
+                title="洛克王国世界互动地图",
+                summary="多条内容提到互动地图工具",
+                term="互动地图",
+                trigger_reason="标准词首次集中命中",
+                evidence_content_ids='["a","b"]',
+                score_detail=json.dumps({
+                    "keyword_priority": "level_1",
+                    "keyword_category": "工具箱工具核心词",
+                    "independent_evidence_count": 2,
+                }, ensure_ascii=False),
+                suggested_tool_type="交互地图",
+                total_score=83,
+                first_seen_at=datetime.combine(display_date, datetime.min.time()),
+                last_seen_at=datetime.combine(display_date, datetime.min.time()),
+            ),
+            RadarClue(
+                signature="radar:locke-exp:notice",
+                game_id=experience_game.id,
+                clue_type=RadarClueType.new_demand,
+                level=RadarClueLevel.urgent,
+                status=RadarClueStatus.pending,
+                title="体验服爆料",
+                term="版本爆料",
+                total_score=90,
+                first_seen_at=datetime.combine(display_date, datetime.min.time()),
+                last_seen_at=datetime.combine(display_date, datetime.min.time()),
+            ),
+            RadarClue(
+                signature="radar:locke:old",
+                game_id=game.id,
+                clue_type=RadarClueType.new_demand,
+                level=RadarClueLevel.important,
+                status=RadarClueStatus.pending,
+                title="旧雷达词",
+                term="旧词",
+                total_score=70,
+                first_seen_at=datetime.combine(display_date - timedelta(days=1), datetime.min.time()),
+                last_seen_at=datetime.combine(display_date - timedelta(days=1), datetime.min.time()),
+            ),
+        ])
         await session.commit()
 
 
@@ -104,6 +173,20 @@ class DashboardSummaryTest(unittest.TestCase):
 
         self.assertEqual(summary.total_demands_today, 11)
         self.assertEqual(len(summary.top_demands), 10)
+
+    def test_summary_returns_today_non_experience_radar_clues(self):
+        display_date = date(2026, 6, 26)
+        asyncio.run(seed_radar_clues(display_date))
+
+        with patch("app.api.dashboard.date") as mocked_date:
+            mocked_date.today.return_value = display_date
+            summary = asyncio.run(fetch_summary())
+
+        self.assertEqual(len(summary.radar_clues), 1)
+        clue = summary.radar_clues[0]
+        self.assertEqual(clue.term, "互动地图")
+        self.assertEqual(clue.game_name, "洛克王国世界")
+        self.assertEqual(clue.evidence_count, 2)
 
 
 if __name__ == "__main__":

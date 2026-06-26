@@ -9,7 +9,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from openai import AsyncOpenAI
 
@@ -18,10 +18,13 @@ from app.models.game import Game
 from app.models.platform_content import PlatformContent
 from app.models.demand_signal import DemandSignal
 from app.models.demand import Demand, DemandStatus, ToolType
+from app.models.radar import RadarClue, RadarClueStatus, RadarClueType
 from app.services.demand_keyword_rules import (
     canonical_game_name,
+    is_experience_server,
     match_demand_keywords,
 )
+from app.services.radar import normalize_concept
 from app.services.signal_engine import SignalEngine
 from app.utils.engagement import compute_content_hot_score
 
@@ -540,8 +543,16 @@ class LLMPipeline:
         stmt = select(PlatformContent).where(
             and_(
                 PlatformContent.game_id == game_id,
-                PlatformContent.published_at >= cutoff,
-                PlatformContent.published_at < end,
+                or_(
+                    and_(
+                        PlatformContent.published_at >= cutoff,
+                        PlatformContent.published_at < end,
+                    ),
+                    and_(
+                        PlatformContent.collected_at >= cutoff,
+                        PlatformContent.collected_at < end,
+                    ),
+                ),
             )
         ).order_by(PlatformContent.hot_score.desc())
         if limit is not None:
@@ -551,13 +562,78 @@ class LLMPipeline:
         return result.scalars().all()
 
     async def _analyze_game_demands(self, game: Game, window_date: date) -> list[dict]:
-        """只按标准词库产出候选分析；正式需求必须由雷达人工升级。"""
+        """体验服走版本/爆料提取(来自雷达线索)；其它游戏只按标准词库产出候选分析。"""
+        if is_experience_server(game.name):
+            return await self._experience_server_demand_analyses(game, window_date)
+
         contents = await self._get_recent_contents(game.id, window_date)
         if not contents:
             return []
 
         signals = await self.engine.get_signals_for_game(game.id, window_date)
         return self._keyword_analysis_from_contents(game, contents, signals)
+
+    async def _experience_server_demand_analyses(
+        self,
+        game: Game,
+        window_date: date,
+    ) -> list[dict]:
+        """体验服：从近期版本/爆料雷达线索(Phase1 LLM 提取)产出需求分析，自动进入需求挖掘卡片。"""
+        cutoff = datetime.combine(window_date, datetime.min.time()) - timedelta(hours=24)
+        stmt = (
+            select(RadarClue)
+            .where(
+                RadarClue.game_id == game.id,
+                RadarClue.status.in_([RadarClueStatus.pending, RadarClueStatus.confirmed]),
+                RadarClue.clue_type == RadarClueType.new_demand,
+                RadarClue.last_seen_at >= cutoff,
+                RadarClue.score_detail.like("%experience_server_llm%"),
+            )
+            .order_by(RadarClue.total_score.desc(), RadarClue.last_seen_at.desc())
+            .limit(30)
+        )
+        clues = (await self.session.execute(stmt)).scalars().all()
+        if not clues:
+            return []
+
+        grouped: dict[str, dict] = {}
+        for clue in clues:
+            norm = normalize_concept(clue.term or "")
+            if not norm:
+                continue
+            stat = grouped.setdefault(norm, {
+                "term": clue.term,
+                "clues": [],
+                "score": 0.0,
+                "evidence": [],
+            })
+            stat["clues"].append(clue)
+            stat["score"] = max(stat["score"], float(clue.total_score or 0))
+            try:
+                ev = json.loads(clue.evidence_content_ids or "[]")
+            except (TypeError, ValueError):
+                ev = []
+            for cid in ev:
+                if str(cid) not in stat["evidence"]:
+                    stat["evidence"].append(str(cid))
+
+        analyses: list[dict] = []
+        for stat in grouped.values():
+            analyses.append({
+                "high_freq_questions": [c.title for c in stat["clues"][:3] if c.title],
+                "info_gap": f"体验服版本/爆料：{stat['term']}，相关更新信息需要聚合。",
+                "tool_feasibility": 3,
+                "tool_type_suggestion": ToolType.other.value,
+                "tool_title": f"{game.name}版本/爆料：{stat['term']}",
+                "tool_description": f"围绕「{stat['term']}」聚合体验服版本更新与爆料信息。",
+                "reasoning": f"近期{len(stat['clues'])}条版本/爆料线索命中「{stat['term']}」。",
+                "potential_score": min(100.0, stat["score"]),
+                "evidence_post_ids": stat["evidence"][:5],
+                "allow_auto_promote": True,
+                "experience_server": True,
+                "standard_term": stat["term"],
+            })
+        return sorted(analyses, key=lambda item: item["potential_score"], reverse=True)
 
     def _keyword_analysis_from_contents(
         self,
@@ -616,6 +692,7 @@ class LLMPipeline:
                 key=lambda content: float(content.hot_score or 0),
                 reverse=True,
             )[:5]
+            allow_auto_promote = len(matched_contents) >= 2
             analyses.append({
                 "high_freq_questions": [
                     content.title for content in evidence_posts if content.title
@@ -634,7 +711,7 @@ class LLMPipeline:
                 "standard_term": canonical_term,
                 "keyword_priority": rule.priority,
                 "keyword_category": rule.category,
-                "allow_auto_promote": False,
+                "allow_auto_promote": allow_auto_promote,
                 "signal_snapshot": signals,
             })
         return sorted(

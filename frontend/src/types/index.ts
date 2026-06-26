@@ -67,11 +67,32 @@ export interface DashboardSummary {
   today_date: string
   today_analysis_completed: boolean
   total_demands_today: number
+  radar_clues: DashboardRadarClue[]
   top_demands: DemandCard[]
+  experience_server_demands: DemandCard[]
   trending_games: { id: string; name: string; genre: string; demand_count: number }[]
   tool_type_distribution: Record<string, number>
   latest_report_summary: string
   daily_analysis: DailySummaryAnalysis
+}
+
+export interface DashboardRadarClue {
+  id: string
+  game_id: string
+  game_name: string
+  title: string
+  term: string
+  summary: string
+  level: "urgent" | "important" | "watch"
+  status: "pending" | "confirmed" | "dismissed" | "promoted" | "archived"
+  clue_type: string
+  suggested_tool_type: string
+  total_score: number
+  keyword_priority: string
+  keyword_category: string
+  evidence_count: number
+  first_seen_at: string
+  last_seen_at: string
 }
 
 export interface DemandLevelBreakdown {

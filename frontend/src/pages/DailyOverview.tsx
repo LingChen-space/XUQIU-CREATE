@@ -1,9 +1,9 @@
 import { useEffect, useState, useRef } from "react"
-import { RefreshCw, Loader2, BarChart3, Gamepad2, TrendingUp, Zap, FileText, Plus, Brain, Target, Layers, RotateCw, ChevronDown, ChevronUp, CheckCircle, XCircle, Circle, LogIn, MoreHorizontal, Database, Bot } from "lucide-react"
+import { RefreshCw, Loader2, BarChart3, Gamepad2, TrendingUp, Zap, FileText, Plus, Brain, Target, Layers, RotateCw, ChevronDown, ChevronUp, CheckCircle, XCircle, Circle, LogIn, MoreHorizontal, Database, Bot, Megaphone } from "lucide-react"
 import { api } from "../api/client"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import type { DashboardSummary, DemandCard, Game, CrawlProgress, CrawlProgressRecord, TapKbSyncStatus } from "../types"
+import type { DashboardRadarClue, DashboardSummary, DemandCard, Game, CrawlProgress, CrawlProgressRecord, TapKbSyncStatus } from "../types"
 import DemandCardView from "../components/DemandCard"
 import { DEMAND_CATEGORY_LABELS, groupDemandsByGame } from "../utils/demandGrouping"
 
@@ -32,6 +32,16 @@ const PLATFORM_COLORS: Record<string, { label: string; color: string; bg: string
   "贴吧": { label: "贴吧", color: "#3385ff", bg: "rgba(51,133,255,0.1)" },
 }
 const DEFAULT_PLATFORM_COLOR = { label: "其他", color: "#888", bg: "rgba(136,136,136,0.1)" }
+const RADAR_LEVEL_LABELS: Record<DashboardRadarClue["level"], string> = {
+  urgent: "紧急",
+  important: "重要",
+  watch: "观察",
+}
+const RADAR_LEVEL_COLORS: Record<DashboardRadarClue["level"], { bg: string; color: string; border: string }> = {
+  urgent: { bg: "var(--red-light)", color: "#b91c1c", border: "rgba(239,68,68,0.24)" },
+  important: { bg: "var(--amber-light)", color: "#92400e", border: "rgba(245,158,11,0.28)" },
+  watch: { bg: "var(--primary-light)", color: "var(--primary)", border: "rgba(37,99,235,0.22)" },
+}
 
 const getPlatformColor = (platform: string) => {
   const normalized = platform.trim().toLowerCase()
@@ -276,6 +286,15 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
     .filter((d) => activeGameNames.has(d.game_name))
     .sort((a, b) => b.potential_score - a.potential_score)
   const demandGroups = groupDemandsByGame(visibleDemands)
+  const experienceDemands = (data?.experience_server_demands ?? [])
+    .filter((d) => activeGameNames.has(d.game_name))
+  const experienceGroups = groupDemandsByGame(experienceDemands)
+  const radarClues = (data?.radar_clues ?? [])
+    .filter((clue) => activeGameNames.has(clue.game_name))
+    .sort((a, b) => {
+      const levelRank = { urgent: 3, important: 2, watch: 1 }
+      return levelRank[b.level] - levelRank[a.level] || b.total_score - a.total_score
+    })
 
   if (loading) {
     return (
@@ -965,6 +984,19 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
             </>
           )}
 
+          {/* Demand radar clues */}
+          {radarClues.length > 0 && (
+            <>
+              <div className="section-header">
+                <h2><Zap size={17} /> 需求雷达</h2>
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                  {radarClues.length} 个今日新词/线索
+                </span>
+              </div>
+              <RadarClueGroups clues={radarClues} />
+            </>
+          )}
+
           {/* Today demands */}
           <div className="section-header">
             <h2><BarChart3 size={17} /> 今日需求排行</h2>
@@ -991,8 +1023,177 @@ export default function DailyOverview({ onSelect, onGameCountChange, onDemandCou
           ) : (
             <DemandGameGroups groups={demandGroups} onSelect={onSelect} />
           )}
+
+          {/* 体验服版本/爆料通知（仅提示，无评估交互）*/}
+          {experienceGroups.length > 0 && (
+            <>
+              <div className="section-header">
+                <h2><Megaphone size={17} /> 体验服版本/爆料</h2>
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                  {experienceDemands.length} 条更新 · 仅提示
+                </span>
+              </div>
+              <ExperienceServerNoticeGroups groups={experienceGroups} />
+            </>
+          )}
         </>
       )}
+    </div>
+  )
+}
+
+function RadarClueGroups({ clues }: { clues: DashboardRadarClue[] }) {
+  const groups = clues.reduce<Array<{ gameId: string; gameName: string; clues: DashboardRadarClue[] }>>((acc, clue) => {
+    let group = acc.find((item) => item.gameId === clue.game_id)
+    if (!group) {
+      group = { gameId: clue.game_id, gameName: clue.game_name, clues: [] }
+      acc.push(group)
+    }
+    group.clues.push(clue)
+    return acc
+  }, [])
+
+  return (
+    <div className="daily-demand-game-groups">
+      {groups.map((group) => (
+        <section
+          key={group.gameId}
+          className="daily-demand-game-group"
+          style={{
+            borderLeft: "3px solid var(--primary)",
+            background: "linear-gradient(180deg, rgba(37,99,235,0.06) 0%, var(--surface) 68%)",
+          }}
+        >
+          <div className="daily-demand-game-header">
+            <div>
+              <h3>{group.gameName}</h3>
+              <div className="daily-demand-game-meta">
+                <span>今日雷达词</span>
+                <span>{group.clues.length} 条线索</span>
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, padding: "4px 0 2px" }}>
+            {group.clues.map((clue) => {
+              const style = RADAR_LEVEL_COLORS[clue.level]
+              const priorityLabel = clue.keyword_priority === "level_1"
+                ? "一级词"
+                : clue.keyword_priority === "level_2"
+                  ? "二级词"
+                  : clue.keyword_priority === "level_3"
+                    ? "三级词"
+                    : "雷达词"
+              return (
+                <div
+                  key={clue.id}
+                  style={{
+                    flex: "1 1 260px",
+                    minWidth: 240,
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    background: "#fff",
+                    border: `1px solid ${style.border}`,
+                    boxShadow: "var(--shadow-sm)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <span
+                      style={{
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                        background: style.bg,
+                        color: style.color,
+                        fontSize: 11,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {RADAR_LEVEL_LABELS[clue.level]}
+                    </span>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{priorityLabel}</span>
+                    {clue.evidence_count > 0 && (
+                      <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-muted)" }}>
+                        {clue.evidence_count} 条证据
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>
+                    {clue.term || clue.title}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                    {clue.summary || clue.title}
+                  </div>
+                  {(clue.suggested_tool_type || clue.keyword_category) && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                      {clue.suggested_tool_type && (
+                        <span className="chip" style={{ fontSize: 11 }}>{clue.suggested_tool_type}</span>
+                      )}
+                      {clue.keyword_category && (
+                        <span className="chip" style={{ fontSize: 11 }}>{clue.keyword_category}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      ))}
+    </div>
+  )
+}
+
+function ExperienceServerNoticeGroups({
+  groups,
+}: {
+  groups: ReturnType<typeof groupDemandsByGame>
+}) {
+  return (
+    <div className="daily-demand-game-groups">
+      {groups.map((group) => (
+        <section
+          key={group.gameId}
+          className="daily-demand-game-group"
+          style={{
+            borderLeft: "3px solid #10b981",
+            background: "linear-gradient(180deg, #f0fdf4 0%, var(--surface) 65%)",
+          }}
+        >
+          <div className="daily-demand-game-header">
+            <div>
+              <h3>{group.gameName}</h3>
+              <div className="daily-demand-game-meta">
+                <span>体验服更新</span>
+                <span>{group.count} 条版本/爆料</span>
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "4px 0 2px" }}>
+            {group.demands.map((d) => {
+              const term = (d.title.split("版本/爆料：")[1] || d.title).trim()
+              return (
+                <span
+                  key={d.id}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "6px 12px",
+                    borderRadius: 16,
+                    background: "#ecfdf5",
+                    color: "#047857",
+                    border: "1px solid #bbf7d0",
+                    fontSize: 13,
+                    fontWeight: 500,
+                  }}
+                >
+                  <Megaphone size={13} />
+                  {term}
+                </span>
+              )
+            })}
+          </div>
+        </section>
+      ))}
     </div>
   )
 }

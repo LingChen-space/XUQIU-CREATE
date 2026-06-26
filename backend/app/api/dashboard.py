@@ -4,20 +4,23 @@ import json
 from fastapi import APIRouter, Depends
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import date
+from datetime import date, datetime, timedelta
 from collections import Counter
 
 from app.database import get_db
 from app.models.game import Game, GameStatus
 from app.models.demand import Demand
 from app.models.daily_report import DailyReport
+from app.models.radar import RadarClue, RadarClueStatus
 from app.schemas.report import (
+    DashboardRadarClue,
     DashboardSummary,
     DailySummaryAnalysis,
     DemandLevelBreakdown,
 )
 from app.api.demands import _build_demand_card
 from app.schemas.demand import compute_demand_level
+from app.services.demand_keyword_rules import is_experience_server
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -32,10 +35,12 @@ async def get_dashboard_summary(db: AsyncSession = Depends(get_db)):
     today = date.today()
     show_all_history = today == HISTORY_SHOWCASE_DATE
 
-    # 获取活跃游戏ID（非已停运）
-    active_stmt = select(Game.id).where(Game.status != GameStatus.inactive)
+    # 获取活跃游戏（非已停运），并标记体验服游戏
+    active_stmt = select(Game).where(Game.status != GameStatus.inactive)
     active_result = await db.execute(active_stmt)
-    active_game_ids = {row[0] for row in active_result.all()}
+    active_games = active_result.scalars().all()
+    active_game_ids = {g.id for g in active_games}
+    experience_game_ids = {g.id for g in active_games if is_experience_server(g.name)}
 
     # 2026-06-24 临时展示全部历史需求；其他日期保持仅展示今日需求。
     stmt = select(Demand).where(
@@ -47,19 +52,28 @@ async def get_dashboard_summary(db: AsyncSession = Depends(get_db)):
     result = await db.execute(stmt)
     today_demands = result.scalars().all()
 
-    # 构建需求卡片列表
-    top_cards = []
-    displayed_demands = today_demands if show_all_history else today_demands[:10]
-    for d in displayed_demands:
-        card = await _build_demand_card(d, db)
-        top_cards.append(card)
+    # 工具需求(评估卡片) 与 体验服需求(简洁通知) 分流：体验服不参与评估分析
+    tool_demands = [d for d in today_demands if d.game_id not in experience_game_ids]
+    experience_demands = [d for d in today_demands if d.game_id in experience_game_ids]
+    if show_all_history:
+        tool_display, experience_display = tool_demands, experience_demands
+    else:
+        tool_display, experience_display = tool_demands[:10], experience_demands[:100]
 
-    # 工具类型分布
-    type_counter = Counter(d.tool_type.value for d in today_demands)
+    top_cards = [await _build_demand_card(d, db) for d in tool_display]
+    experience_cards = [await _build_demand_card(d, db) for d in experience_display]
+    radar_clues = await _get_today_radar_clues(
+        db,
+        today,
+        active_game_ids - experience_game_ids,
+    )
+
+    # 工具类型分布（仅工具需求）
+    type_counter = Counter(d.tool_type.value for d in tool_demands)
     type_distribution = dict(type_counter)
 
-    # 趋势游戏 (今日需求最多的游戏)
-    game_counter = Counter(d.game_id for d in today_demands)
+    # 趋势游戏 (今日工具需求最多的游戏)
+    game_counter = Counter(d.game_id for d in tool_demands)
     top_game_ids = [gid for gid, _ in game_counter.most_common(5)]
     trending_games = []
     if top_game_ids:
@@ -85,19 +99,75 @@ async def get_dashboard_summary(db: AsyncSession = Depends(get_db)):
     today_report_result = await db.execute(today_report_stmt)
     today_analysis_completed = today_report_result.scalar() is not None
 
-    # ── 每日总结分析 ──
-    daily_analysis = _build_daily_analysis(today_demands)
+    # ── 每日总结分析（仅工具需求）──
+    daily_analysis = _build_daily_analysis(tool_demands)
 
     return DashboardSummary(
         today_date=today,
         today_analysis_completed=today_analysis_completed,
-        total_demands_today=len(today_demands),
+        total_demands_today=len(tool_demands),
+        radar_clues=radar_clues,
         top_demands=top_cards,
+        experience_server_demands=experience_cards,
         trending_games=trending_games,
         tool_type_distribution=type_distribution,
         latest_report_summary=report_summary,
         daily_analysis=daily_analysis,
     )
+
+
+async def _get_today_radar_clues(
+    db: AsyncSession,
+    today: date,
+    game_ids: set[str],
+) -> list[DashboardRadarClue]:
+    if not game_ids:
+        return []
+
+    start = datetime.combine(today, datetime.min.time())
+    end = start + timedelta(days=1)
+    stmt = (
+        select(RadarClue, Game.name)
+        .join(Game, Game.id == RadarClue.game_id)
+        .where(
+            RadarClue.game_id.in_(game_ids),
+            RadarClue.status.in_([RadarClueStatus.pending, RadarClueStatus.confirmed]),
+            RadarClue.first_seen_at >= start,
+            RadarClue.first_seen_at < end,
+        )
+        .order_by(RadarClue.total_score.desc(), RadarClue.first_seen_at.desc())
+        .limit(30)
+    )
+    rows = (await db.execute(stmt)).all()
+    clues: list[DashboardRadarClue] = []
+    for clue, game_name in rows:
+        try:
+            detail = json.loads(clue.score_detail or "{}")
+        except (TypeError, json.JSONDecodeError):
+            detail = {}
+        try:
+            evidence_ids = json.loads(clue.evidence_content_ids or "[]")
+        except (TypeError, json.JSONDecodeError):
+            evidence_ids = []
+        clues.append(DashboardRadarClue(
+            id=clue.id,
+            game_id=clue.game_id,
+            game_name=game_name,
+            title=clue.title,
+            term=clue.term,
+            summary=clue.summary,
+            level=clue.level.value,
+            status=clue.status.value,
+            clue_type=clue.clue_type.value,
+            suggested_tool_type=clue.suggested_tool_type,
+            total_score=float(clue.total_score or 0),
+            keyword_priority=str(detail.get("keyword_priority") or ""),
+            keyword_category=str(detail.get("keyword_category") or ""),
+            evidence_count=int(detail.get("independent_evidence_count") or len(evidence_ids)),
+            first_seen_at=clue.first_seen_at,
+            last_seen_at=clue.last_seen_at,
+        ))
+    return clues
 
 
 def _build_daily_analysis(demands: list[Demand]) -> DailySummaryAnalysis:
