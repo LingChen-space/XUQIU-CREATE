@@ -2,7 +2,7 @@
 """每日调度器 - 基于 APScheduler 的定时任务管理。"""
 
 import logging
-from datetime import date
+from datetime import date, datetime, time
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import async_session
+from app.models.daily_report import DailyReport
 from app.models.game import Game, GameStatus
 from app.services.data_adapter import DataAdapter
 from app.services.external_monitor_sync import TapKbForumSyncService
@@ -23,6 +24,22 @@ from app.services.radar_runner import run_radar_scan_cycle
 logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
+_daily_pipeline_running = False
+
+
+def should_run_daily_catchup(
+    *,
+    now: datetime,
+    schedule_hour: int,
+    schedule_minute: int,
+    has_today_report: bool,
+    pipeline_running: bool,
+) -> bool:
+    """判断是否需要补跑当天每日主管线。"""
+    if has_today_report or pipeline_running:
+        return False
+    scheduled_at = datetime.combine(now.date(), time(schedule_hour, schedule_minute))
+    return now >= scheduled_at
 
 
 async def run_tap_kb_realtime_sync():
@@ -81,99 +98,150 @@ async def run_daily_pipeline(force_recrawl: bool = False):
     3. LLM 分析 - 对候选游戏做痛点提炼
     4. 日报生成 - 汇总生成结构化日报
     """
+    global _daily_pipeline_running
+    if _daily_pipeline_running:
+        logger.info("[DailyPipeline] 已有主管线在执行，跳过本次重复触发")
+        return {
+            "ok": True,
+            "status": "running",
+            "message": "每日需求挖掘管线正在执行中，已跳过重复触发。",
+            "external_sync": None,
+            "ingest": {
+                "status": "running",
+                "message": "每日需求挖掘管线正在执行中。",
+                "ingested_count": 0,
+                "combos_total": 0,
+                "force_recrawl": force_recrawl,
+            },
+            "signals_count": 0,
+            "demands_count": 0,
+            "report_id": None,
+        }
+
+    _daily_pipeline_running = True
     today = date.today()
     logger.info(f"[DailyPipeline] 开始执行 - {today}")
 
-    async with async_session() as session:
-        try:
-            # --- Step 0: 外部监控后台同步 ---
-            # 外部后台内容不依赖本地搜索词配置，仅匹配游戏管理中已有游戏。
-            external_sync = await TapKbForumSyncService(session).sync(
-                days=30,
-                force=force_recrawl,
-                reason="pipeline",
-            )
-            logger.info(f"[DailyPipeline] 外部同步完成 - {external_sync.get('message', '')}")
+    try:
+        async with async_session() as session:
+            try:
+                # --- Step 0: 外部监控后台同步 ---
+                # 外部后台内容不依赖本地搜索词配置，仅匹配游戏管理中已有游戏。
+                external_sync = await TapKbForumSyncService(session).sync(
+                    days=30,
+                    force=force_recrawl,
+                    reason="pipeline",
+                )
+                logger.info(f"[DailyPipeline] 外部同步完成 - {external_sync.get('message', '')}")
 
-            # --- Step 1: 数据接入 ---
-            adapter = DataAdapter(session)
+                # --- Step 1: 数据接入 ---
+                adapter = DataAdapter(session)
 
-            # 获取所有活跃游戏（非已停运）
-            stmt = (
-                select(Game)
-                .where(Game.status != GameStatus.inactive)
-                .order_by(Game.priority_weight.desc(), Game.name)
-            )
-            result = await session.execute(stmt)
-            games = result.scalars().all()
-            game_ids = [g.id for g in games]
+                # 获取所有活跃游戏（非已停运）
+                stmt = (
+                    select(Game)
+                    .where(Game.status != GameStatus.inactive)
+                    .order_by(Game.priority_weight.desc(), Game.name)
+                )
+                result = await session.execute(stmt)
+                games = result.scalars().all()
+                game_ids = [g.id for g in games]
 
-            if not game_ids:
-                logger.warning("[DailyPipeline] 无活跃游戏，跳过")
+                if not game_ids:
+                    logger.warning("[DailyPipeline] 无活跃游戏，跳过")
+                    return {
+                        "ok": True,
+                        "status": "skipped",
+                        "message": "无活跃游戏，已跳过本次管线。",
+                        "ingest": {
+                            "status": "no_active_games",
+                            "message": "暂无活跃游戏，本次未执行采集。",
+                            "ingested_count": 0,
+                            "combos_total": 0,
+                            "force_recrawl": force_recrawl,
+                        },
+                        "external_sync": None,
+                        "signals_count": 0,
+                        "demands_count": 0,
+                        "report_id": None,
+                    }
+
+                count = await adapter.ingest_contents(game_ids, force_recrawl=force_recrawl)
+                logger.info(f"[DailyPipeline] 数据接入完成 - {count} 条内容")
+
+                # --- Step 2: 信号计算 ---
+                engine = SignalEngine(session)
+                signals = await engine.compute_all_signals(game_ids, today)
+                logger.info(f"[DailyPipeline] 信号计算完成 - {len(signals)} 条信号")
+
+                # --- Step 3: LLM 分析 ---
+                pipeline = LLMPipeline(session)
+                demands = await pipeline.run_pipeline(game_ids, today)
+                logger.info(f"[DailyPipeline] LLM分析完成 - {len(demands)} 条需求")
+
+                # --- Step 4: 日报生成 ---
+                report_gen = ReportGenerator(session)
+                report = await report_gen.generate_daily_report(today)
+                logger.info(f"[DailyPipeline] 日报生成完成 - {report.id}")
                 return {
                     "ok": True,
-                    "status": "skipped",
-                    "message": "无活跃游戏，已跳过本次管线。",
+                    "status": "completed",
+                    "message": "管线执行完成",
+                    "external_sync": external_sync,
+                    "ingest": adapter.last_ingest_result,
+                    "signals_count": len(signals),
+                    "demands_count": len(demands),
+                    "report_id": report.id,
+                }
+
+            except Exception as e:
+                logger.exception(f"[DailyPipeline] 执行失败: {e}")
+                await session.rollback()
+                return {
+                    "ok": False,
+                    "status": "failed",
+                    "message": str(e),
+                    "external_sync": None,
                     "ingest": {
-                        "status": "no_active_games",
-                        "message": "暂无活跃游戏，本次未执行采集。",
+                        "status": "failed",
+                        "message": "管线执行失败，未能确认采集状态。",
                         "ingested_count": 0,
                         "combos_total": 0,
                         "force_recrawl": force_recrawl,
                     },
-                    "external_sync": None,
                     "signals_count": 0,
                     "demands_count": 0,
                     "report_id": None,
                 }
+    finally:
+        _daily_pipeline_running = False
 
-            count = await adapter.ingest_contents(game_ids, force_recrawl=force_recrawl)
-            logger.info(f"[DailyPipeline] 数据接入完成 - {count} 条内容")
 
-            # --- Step 2: 信号计算 ---
-            engine = SignalEngine(session)
-            signals = await engine.compute_all_signals(game_ids, today)
-            logger.info(f"[DailyPipeline] 信号计算完成 - {len(signals)} 条信号")
+async def run_daily_pipeline_catchup():
+    """服务恢复或错过 06:00 后，自动补跑今日每日主管线。"""
+    today = date.today()
+    async with async_session() as session:
+        report_exists = (
+            await session.execute(
+                select(DailyReport.id).where(DailyReport.report_date == today).limit(1)
+            )
+        ).scalar() is not None
 
-            # --- Step 3: LLM 分析 ---
-            pipeline = LLMPipeline(session)
-            demands = await pipeline.run_pipeline(game_ids, today)
-            logger.info(f"[DailyPipeline] LLM分析完成 - {len(demands)} 条需求")
+    if not should_run_daily_catchup(
+        now=datetime.now(),
+        schedule_hour=settings.schedule_hour,
+        schedule_minute=settings.schedule_minute,
+        has_today_report=report_exists,
+        pipeline_running=_daily_pipeline_running,
+    ):
+        return {
+            "ok": True,
+            "status": "skipped",
+            "message": "今日每日主管线无需补跑。",
+        }
 
-            # --- Step 4: 日报生成 ---
-            report_gen = ReportGenerator(session)
-            report = await report_gen.generate_daily_report(today)
-            logger.info(f"[DailyPipeline] 日报生成完成 - {report.id}")
-            return {
-                "ok": True,
-                "status": "completed",
-                "message": "管线执行完成",
-                "external_sync": external_sync,
-                "ingest": adapter.last_ingest_result,
-                "signals_count": len(signals),
-                "demands_count": len(demands),
-                "report_id": report.id,
-            }
-
-        except Exception as e:
-            logger.exception(f"[DailyPipeline] 执行失败: {e}")
-            await session.rollback()
-            return {
-                "ok": False,
-                "status": "failed",
-                "message": str(e),
-                "external_sync": None,
-                "ingest": {
-                    "status": "failed",
-                    "message": "管线执行失败，未能确认采集状态。",
-                    "ingested_count": 0,
-                    "combos_total": 0,
-                    "force_recrawl": force_recrawl,
-                },
-                "signals_count": 0,
-                "demands_count": 0,
-                "report_id": None,
-            }
+    logger.info("[DailyPipelineCatchup] 今日 06:00 任务未完成，开始自动补跑")
+    return await run_daily_pipeline(force_recrawl=False)
 
 
 def start_scheduler():
@@ -184,6 +252,19 @@ def start_scheduler():
         id="daily_demand_pipeline",
         name="每日需求挖掘管线",
         replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=12 * 60 * 60,
+    )
+    scheduler.add_job(
+        run_daily_pipeline_catchup,
+        trigger=IntervalTrigger(minutes=5),
+        id="daily_demand_pipeline_catchup",
+        name="每日需求挖掘管线补跑守护",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        next_run_time=datetime.now(),
     )
     scheduler.add_job(
         run_tap_kb_realtime_sync,
