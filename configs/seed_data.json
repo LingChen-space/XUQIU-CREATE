@@ -185,7 +185,7 @@
       "game_id": null,
       "platform": "taptap",
       "keywords": "工具,体验服",
-      "enabled": 1,
+      "enabled": 0,
       "crawl_count": 200,
       "proxy_url": "http://127.0.0.1:7897"
     },

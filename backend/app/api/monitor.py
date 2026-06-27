@@ -8,7 +8,7 @@ import httpx
 
 from app.config import settings
 from app.database import async_session
-from app.services.data_adapter import DataAdapter
+from app.services.data_adapter import DataAdapter, DISABLED_SCRIPT_COLLECTION_PLATFORMS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/monitor", tags=["monitor"])
@@ -101,6 +101,8 @@ async def retry_crawl(req: RetryRequest):
             raise HTTPException(status_code=400, detail="proxy_mode 仅支持 auto/none/proxy")
         if req.douyin_browser_method not in {"method1", "method2"}:
             raise HTTPException(status_code=400, detail="douyin_browser_method 仅支持 method1/method2")
+        if req.platform in DISABLED_SCRIPT_COLLECTION_PLATFORMS:
+            raise HTTPException(status_code=400, detail="TapTap 本地IP采集已关闭，请使用游戏管理里的 TapTap 分组 group_id 配置")
 
         try:
             r = await adapter.ingest_single(

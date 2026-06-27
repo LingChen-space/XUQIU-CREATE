@@ -58,6 +58,31 @@ class DataAdapterCollectionTest(unittest.TestCase):
         self.assertEqual([combo[0] for combo in combos], ["douyin"])
         self.assertEqual([record.platform for record in progress], ["douyin"])
 
+    def test_progress_list_hides_disabled_taptap_records(self):
+        async def run_case():
+            async with TestSession() as session:
+                session.add_all([
+                    CrawlProgress(
+                        platform="taptap",
+                        keyword="旧Tap关键词",
+                        crawl_count=200,
+                        status="failed",
+                    ),
+                    CrawlProgress(
+                        platform="douyin",
+                        keyword="抖音关键词",
+                        crawl_count=50,
+                        status="completed",
+                    ),
+                ])
+                await session.commit()
+
+                return await DataAdapter(session).get_progress()
+
+        progress = asyncio.run(run_case())
+
+        self.assertEqual([record["platform"] for record in progress], ["douyin"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1281,7 +1281,11 @@ class DataAdapter:
 
     async def get_progress(self) -> list[dict]:
         """获取当前采集进度（所有组合的状态）。"""
-        stmt = select(CrawlProgress).order_by(CrawlProgress.created_at.desc())
+        stmt = (
+            select(CrawlProgress)
+            .where(CrawlProgress.platform.not_in(DISABLED_SCRIPT_COLLECTION_PLATFORMS))
+            .order_by(CrawlProgress.created_at.desc())
+        )
         result = await self.session.execute(stmt)
         records = result.scalars().all()
         items = []
