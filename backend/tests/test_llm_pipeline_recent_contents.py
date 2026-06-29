@@ -6,10 +6,12 @@ import unittest
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.database import Base
 from app.models.game import Game, GameGenre, GameStatus
+from app.models.demand import Demand, ToolType
 from app.models.platform_content import ContentPlatform, ContentType, PlatformContent
 from app.services.llm_pipeline import LLMPipeline
 
@@ -60,6 +62,60 @@ class LLMPipelineRecentContentsTest(unittest.TestCase):
             asyncio.run(scenario()),
             ["old-published-today-collected"],
         )
+
+    def test_pipeline_reuses_existing_standard_demand_across_dates(self):
+        async def scenario():
+            async with Session() as session:
+                game = Game(
+                    name="三角洲行动",
+                    genre=GameGenre.fps,
+                    status=GameStatus.operating,
+                    priority_weight=3,
+                )
+                session.add(game)
+                await session.flush()
+                session.add(Demand(
+                    game_id=game.id,
+                    tool_type=ToolType.build_calc,
+                    title="三角洲行动卡战备战备/改枪工具",
+                    demand_date=date(2026, 6, 26),
+                    llm_analysis='{"reasoning": "内容集中提到卡战备和战备值配装需求。"}',
+                ))
+                session.add(PlatformContent(
+                    game_id=game.id,
+                    platform=ContentPlatform.taptap,
+                    content_type=ContentType.post,
+                    source_id="delta-loadout-new",
+                    url="https://example.com/delta-loadout-new",
+                    title="三角洲行动卡战备怎么搞",
+                    body="卡战备工具和战备值配装需求很高",
+                    published_at=datetime(2026, 6, 29, 9, 0),
+                    collected_at=datetime(2026, 6, 29, 9, 0),
+                    hot_score=80,
+                ))
+                session.add(PlatformContent(
+                    game_id=game.id,
+                    platform=ContentPlatform.taptap,
+                    content_type=ContentType.post,
+                    source_id="delta-loadout-new-2",
+                    url="https://example.com/delta-loadout-new-2",
+                    title="三角洲行动战备值配装推荐",
+                    body="卡战备和改枪参数需要整理",
+                    published_at=datetime(2026, 6, 29, 10, 0),
+                    collected_at=datetime(2026, 6, 29, 10, 0),
+                    hot_score=75,
+                ))
+                await session.commit()
+
+                demands = await LLMPipeline(session).run_pipeline([game.id], date(2026, 6, 29))
+                rows = (await session.execute(select(Demand))).scalars().all()
+                return demands, rows
+
+        demands, rows = asyncio.run(scenario())
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(len(demands), 1)
+        self.assertEqual(rows[0].demand_date, date(2026, 6, 29))
 
 
 if __name__ == "__main__":

@@ -508,6 +508,38 @@ def _evidence_ids_for_analysis(game: Game, analysis: dict, evidence_posts: list[
     ]
 
 
+def _safe_json_dict(raw: str | None) -> dict:
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _demand_identity_key(game_name: str, tool_type: ToolType, title: str, analysis: dict) -> str:
+    standard_term = str(analysis.get("standard_term") or "").strip()
+    if standard_term:
+        term_key = _normalize_game_name(standard_term)
+    else:
+        analysis_text = " ".join(
+            str(analysis.get(key) or "")
+            for key in ("info_gap", "tool_description", "reasoning")
+        )
+        matched_terms = match_demand_keywords(game_name, f"{title} {analysis_text}")
+        if matched_terms:
+            term_key = _normalize_game_name(matched_terms[0].canonical_term)
+        else:
+            term_key = _normalize_game_name(title)
+        for alias in _alias_group_for_game(game_name):
+            alias_key = _normalize_game_name(alias)
+            if alias_key and term_key.startswith(alias_key):
+                term_key = term_key[len(alias_key):]
+                break
+    return f"{tool_type.value}:{term_key}"
+
+
 class LLMPipeline:
     """LLM 分析管线。"""
 
@@ -958,6 +990,37 @@ class LLMPipeline:
             "potential_score": round(potential, 0),
         }
 
+    async def _find_existing_demand(
+        self,
+        game: Game,
+        tool_type: ToolType,
+        title: str,
+        analysis: dict,
+    ) -> Demand | None:
+        """同一游戏同一标准需求跨日期复用一条卡片，避免每日重复生成。"""
+        target_key = _demand_identity_key(game.name, tool_type, title, analysis)
+        result = await self.session.execute(
+            select(Demand)
+            .where(
+                and_(
+                    Demand.game_id == game.id,
+                    Demand.tool_type == tool_type,
+                )
+            )
+            .order_by(Demand.demand_date.desc(), Demand.created_at.desc())
+        )
+        for demand in result.scalars().all():
+            existing_analysis = _safe_json_dict(demand.llm_analysis)
+            existing_key = _demand_identity_key(
+                game.name,
+                tool_type,
+                demand.title,
+                existing_analysis,
+            )
+            if existing_key == target_key:
+                return demand
+        return None
+
     async def run_pipeline(self, game_ids: list[str], window_date: date) -> list[Demand]:
         """
         运行完整分析管线：对每款游戏执行 LLM 分析，生成需求卡片写入数据库。
@@ -1007,30 +1070,17 @@ class LLMPipeline:
                     tool_type = ToolType.other
 
                 title = analysis.get("tool_title", f"{game.name}工具需求")
-                demand_stmt = (
-                    select(Demand)
-                    .where(
-                        and_(
-                            Demand.game_id == game.id,
-                            Demand.demand_date == window_date,
-                            Demand.tool_type == tool_type,
-                            Demand.title == title,
-                        )
-                    )
-                    .order_by(Demand.created_at.desc())
-                )
-                demand_result = await self.session.execute(demand_stmt)
-                demand = demand_result.scalar()
+                demand = await self._find_existing_demand(game, tool_type, title, analysis)
                 if demand is None:
                     demand = Demand(
                         id=str(uuid.uuid4()),
                         game_id=game.id,
                         status=DemandStatus.new,
-                        demand_date=window_date,
                     )
                     self.session.add(demand)
 
                 evidence_ids = _evidence_ids_for_analysis(game, analysis, evidence_posts)
+                demand.demand_date = window_date
                 demand.tool_type = tool_type
                 demand.title = title
                 demand.description = analysis.get("tool_description", "")
