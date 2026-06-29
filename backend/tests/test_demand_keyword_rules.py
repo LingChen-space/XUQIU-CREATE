@@ -78,6 +78,17 @@ class DemandKeywordRulesTest(unittest.TestCase):
             {item.canonical_term for item in genshin_matches},
         )
 
+    def test_survival_aliases_normalize_to_lost_control_terms(self):
+        matches = match_demand_keywords(
+            "失控进化",
+            "建家材料怎么规划，抄家路线和资源点地图也想查，背包材料篇看不懂",
+        )
+
+        self.assertEqual(
+            {item.canonical_term for item in matches},
+            {"建筑耗材统计", "抄家防御模拟", "资源采集点位", "全道具图鉴"},
+        )
+
     def test_game_alias_resolves_to_standard_name(self):
         self.assertEqual(canonical_game_name("星穹铁道"), "崩坏：星穹铁道")
         self.assertEqual(canonical_game_name("三角洲行动体验服"), "三角洲行动")
