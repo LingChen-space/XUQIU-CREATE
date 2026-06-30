@@ -80,6 +80,7 @@ MONITOR_PLATFORM_ENDPOINTS: dict[str, str] = {
     "xiaoheihe": "/heybox",
     "taptap": "/taptap",
     "douyin": "/douyin",
+    "bilibili": "/bilibili",
 }
 DISABLED_SCRIPT_COLLECTION_PLATFORMS = {"taptap"}
 
@@ -330,6 +331,8 @@ def _extract_source_id(platform_key: str, item: dict) -> str:
             item.get("aweme_id"),
             _extract_douyin_video_id(item.get("video_url", "")),
         )
+    if platform_key == "bilibili":
+        return _first_text(item.get("source_id"), item.get("bvid"), item.get("aid"))
     return _first_text(item.get("source_id"), item.get("id"), item.get("id_str"))
 
 
@@ -532,6 +535,11 @@ class DataAdapter:
                 {"keyword": keyword, "count": count, "sort": "latest", "headless": False, "browser_method": douyin_browser_method},
                 {"keyword": keyword, "count": count, "sort": "most_like", "headless": False, "browser_method": douyin_browser_method},
             ]
+        elif platform_key == "bilibili":
+            sort_configs = [
+                {"keyword": keyword, "count": count, "sort": "click"},
+                {"keyword": keyword, "count": count, "sort": "pubdate"},
+            ]
         else:
             sort_configs = [{"keyword": keyword, "count": count}]
 
@@ -666,6 +674,18 @@ class DataAdapter:
                 pub_time = now
             view_count = 0
             comment_count = _first_int(item.get("comment_count"), item.get("comments"))
+        elif platform_key == "bilibili":
+            title = item.get("title", "")
+            body = item.get("description", "")
+            url = item.get("url", "")
+            like_count = _first_int(item.get("like_count"), item.get("likes"))
+            view_count = _first_int(item.get("play_count"), item.get("view_count"), item.get("views"))
+            comment_count = _first_int(item.get("comment_count"), item.get("comments"), item.get("review"))
+            pubdate = item.get("pubdate", "")
+            try:
+                pub_time = datetime.strptime(pubdate, "%Y-%m-%d %H:%M:%S") if pubdate else now
+            except (ValueError, TypeError):
+                pub_time = now
         else:
             title = item.get("title", "")
             body = item.get("body", item.get("description", ""))

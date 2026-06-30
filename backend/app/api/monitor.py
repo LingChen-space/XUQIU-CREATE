@@ -169,6 +169,23 @@ async def trigger_douyin(keyword: str = Query(default="工具"), count: int = Qu
         raise HTTPException(status_code=503, detail=f"监控服务不可用: {e}")
 
 
+@router.post("/bilibili")
+async def trigger_bilibili(keyword: str = Query(default="工具"), count: int = Query(default=50)):
+    """触发 B站采集。"""
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.post(
+                f"{settings.monitor_api_base}/bilibili",
+                json={"keyword": keyword, "count": count, "sort": "click"},
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"监控服务不可用: {e}")
+
+
 @router.get("/douyin/login")
 async def douyin_login_status():
     """查询抖音登录窗口状态。"""

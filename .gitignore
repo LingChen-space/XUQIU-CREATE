@@ -43,5 +43,6 @@ rebuild_pipeline.py
 # Monitor temp scripts
 监控脚本/_*.py
 监控脚本/_*.bat
+crawler/.bilibili/
 
 *_cleaned.json

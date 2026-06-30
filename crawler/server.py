@@ -38,9 +38,11 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from app.heybox.api import api_search
 from app.taptap.api import api_agg_search, TapTapRiskControlError
+from app.bilibili.api import get_bilibili_web_search_result
 from heybox_data_clean import extract_items
 from taptap_data_clean import extract_moments
 from douyin_data_clean import extract_videos
+from bilibili_data_clean import extract_videos as extract_bilibili_videos
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("monitor-server")
@@ -50,6 +52,9 @@ HEYBOX_SORT_VALUES = ("default", "create_date", "award_num", "comment_num")
 TAPTAP_SORT_VALUES = ("default", "update_time,desc", "commented_time,desc")
 DOUYIN_SORT_VALUES = ("default", "latest", "most_like")
 DOUYIN_BROWSER_METHOD_VALUES = ("method1", "method2", "cloak", "playwright")
+BILIBILI_SORT_VALUES = ("default", "click", "pubdate")
+BILIBILI_DEFAULT_PAGE_SIZE = 42
+BILIBILI_MAX_PAGES = 2
 
 DOUYIN_COOKIE_PATH = SCRIPT_DIR / ".cloakbrowser" / "douyin-cookies.json"
 DOUYIN_LOGIN_COOKIE_NAMES = {
@@ -267,6 +272,17 @@ class DouyinCrawlRequest(CrawlRequest):
         return v
 
 
+class BilibiliCrawlRequest(CrawlRequest):
+    sort: str = "default"
+
+    @field_validator("sort")
+    @classmethod
+    def validate_sort(cls, v: str) -> str:
+        if v not in BILIBILI_SORT_VALUES:
+            raise ValueError(f"sort must be one of: {BILIBILI_SORT_VALUES}")
+        return v
+
+
 class CrawlResponse(BaseModel):
     ok: bool
     platform: str
@@ -436,6 +452,53 @@ async def _fetch_douyin(keyword: str, count: int, sort: str, headless: bool, bro
 
 
 # ---------------------------------------------------------------------------
+# B站采集
+# ---------------------------------------------------------------------------
+
+def _fetch_bilibili(keyword: str, count: int, sort: str) -> list[dict]:
+    items: list[dict] = []
+    seen: set[str] = set()
+    page_size = BILIBILI_DEFAULT_PAGE_SIZE
+    search_order = "click" if sort == "default" else sort
+
+    for page in range(1, BILIBILI_MAX_PAGES + 1):
+        if len(items) >= count:
+            break
+        logger.info(
+            f"[Bilibili] keyword={keyword!r} page={page} page_size={page_size} "
+            f"sort={search_order!r}"
+        )
+        resp = get_bilibili_web_search_result(
+            keyword=keyword,
+            search_order=search_order,
+            page=page,
+            page_size=page_size,
+        )
+        page_results = resp.get("data", {}).get("result", [])
+        if not page_results:
+            break
+
+        cleaned = extract_bilibili_videos(resp)
+        added = 0
+        for item in cleaned:
+            key = item.get("source_id") or item.get("bvid") or item.get("aid") or item.get("url", "")
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
+            items.append(item)
+            added += 1
+            if len(items) >= count:
+                break
+        logger.info(f"[Bilibili] page cleaned={len(cleaned)} added={added} total={len(items)}")
+
+        if len(page_results) < page_size:
+            break
+
+    return items[:count]
+
+
+# ---------------------------------------------------------------------------
 # API 端点 - 单次采集
 # ---------------------------------------------------------------------------
 
@@ -448,6 +511,7 @@ async def health():
             "heybox": True,
             "taptap": True,
             "douyin": douyin_ready,
+            "bilibili": True,
         },
         "douyin_login": _get_douyin_login_state(),
     }
@@ -518,6 +582,18 @@ async def crawl_douyin(req: DouyinCrawlRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("[Douyin] Crawl failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/monitor/bilibili", response_model=CrawlResponse)
+async def crawl_bilibili(req: BilibiliCrawlRequest):
+    try:
+        items = _fetch_bilibili(req.keyword, req.count, req.sort)
+        return CrawlResponse(ok=True, platform="bilibili", keyword=req.keyword, count=len(items), items=items)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("[Bilibili] Crawl failed")
         raise HTTPException(status_code=500, detail=str(e))
 
 

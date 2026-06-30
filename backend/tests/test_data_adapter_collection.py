@@ -29,6 +29,7 @@ async def seed_platform_configs():
         session.add_all([
             PlatformSearchConfig(platform="taptap", keywords="Tap关键词", enabled=True, crawl_count=10),
             PlatformSearchConfig(platform="douyin", keywords="抖音关键词", enabled=True, crawl_count=10),
+            PlatformSearchConfig(platform="bilibili", keywords="B站关键词", enabled=True, crawl_count=10),
         ])
         await session.commit()
 
@@ -55,8 +56,8 @@ class DataAdapterCollectionTest(unittest.TestCase):
 
         combos, progress = asyncio.run(run_case())
 
-        self.assertEqual([combo[0] for combo in combos], ["douyin"])
-        self.assertEqual([record.platform for record in progress], ["douyin"])
+        self.assertEqual([combo[0] for combo in combos], ["douyin", "bilibili"])
+        self.assertEqual([record.platform for record in progress], ["bilibili", "douyin"])
 
     def test_progress_list_hides_disabled_taptap_records(self):
         async def run_case():
@@ -82,6 +83,37 @@ class DataAdapterCollectionTest(unittest.TestCase):
         progress = asyncio.run(run_case())
 
         self.assertEqual([record["platform"] for record in progress], ["douyin"])
+
+    def test_bilibili_items_map_to_standard_content(self):
+        item = {
+            "source_id": "BV123",
+            "title": "三角洲行动 配装工具",
+            "description": "B站视频简介",
+            "url": "https://www.bilibili.com/video/BV123",
+            "play_count": 12000,
+            "like_count": 900,
+            "comment_count": 80,
+            "pubdate": "2026-06-30 10:20:30",
+        }
+
+        async def run_case():
+            async with TestSession() as session:
+                return DataAdapter(session)._map_monitor_item(
+                    "game-1",
+                    "三角洲行动",
+                    "bilibili",
+                    item,
+                    "配装工具",
+                )
+
+        mapped = asyncio.run(run_case())
+
+        self.assertEqual(mapped["platform"], "B站")
+        self.assertEqual(mapped["source_id"], "BV123")
+        self.assertEqual(mapped["view_count"], 12000)
+        self.assertEqual(mapped["like_count"], 900)
+        self.assertEqual(mapped["comment_count"], 80)
+        self.assertEqual(mapped["url"], "https://www.bilibili.com/video/BV123")
 
 
 if __name__ == "__main__":
