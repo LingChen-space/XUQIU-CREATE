@@ -38,7 +38,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from app.heybox.api import api_search
 from app.taptap.api import api_agg_search, TapTapRiskControlError
-from app.bilibili.api import get_bilibili_web_search_result
+from app.bilibili.api import BilibiliAPIError, get_bilibili_web_search_result
 from heybox_data_clean import extract_items
 from taptap_data_clean import extract_moments
 from douyin_data_clean import extract_videos
@@ -468,12 +468,18 @@ def _fetch_bilibili(keyword: str, count: int, sort: str) -> list[dict]:
             f"[Bilibili] keyword={keyword!r} page={page} page_size={page_size} "
             f"sort={search_order!r}"
         )
-        resp = get_bilibili_web_search_result(
-            keyword=keyword,
-            search_order=search_order,
-            page=page,
-            page_size=page_size,
-        )
+        try:
+            resp = get_bilibili_web_search_result(
+                keyword=keyword,
+                search_order=search_order,
+                page=page,
+                page_size=page_size,
+            )
+        except BilibiliAPIError:
+            if items:
+                logger.warning("[Bilibili] stop paging after partial results", exc_info=True)
+                break
+            raise
         page_results = resp.get("data", {}).get("result", [])
         if not page_results:
             break
